@@ -8,7 +8,6 @@ from urllib3.util.retry import Retry
 import threading
 from urllib.parse import quote
 
-
 # =========================================================
 # PAGE SETTINGS
 # =========================================================
@@ -20,14 +19,12 @@ st.set_page_config(
 )
 
 st.title("📊 Binance RSI Scanner")
-
 st.caption(
     "Binance USDT Spot RSI Scanner with multi-timeframe confirmation"
 )
 
-
 # =========================================================
-# SETTINGS
+# FILTERS
 # =========================================================
 
 timeframe = st.selectbox(
@@ -42,11 +39,6 @@ confirmation_timeframe = st.selectbox(
     index=0
 )
 
-
-# ---------------------------------------------------------
-# PRIMARY RSI RANGE
-# ---------------------------------------------------------
-
 rsi_range = st.selectbox(
     "Select Primary RSI Range",
     [
@@ -59,11 +51,6 @@ rsi_range = st.selectbox(
     ],
     index=2
 )
-
-
-# ---------------------------------------------------------
-# CONFIRMATION RSI RANGE
-# ---------------------------------------------------------
 
 confirmation_rsi_range = st.selectbox(
     "Confirmation RSI Range",
@@ -78,11 +65,6 @@ confirmation_rsi_range = st.selectbox(
     index=0
 )
 
-
-# ---------------------------------------------------------
-# RSI DIRECTION
-# ---------------------------------------------------------
-
 direction_filter = st.selectbox(
     "RSI Direction (primary)",
     [
@@ -93,20 +75,10 @@ direction_filter = st.selectbox(
     index=0
 )
 
-
-# ---------------------------------------------------------
-# CLOSED CANDLES
-# ---------------------------------------------------------
-
 use_closed_candles = st.checkbox(
     "Use closed candles only (recommended)",
     value=True
 )
-
-
-# ---------------------------------------------------------
-# AUTO REFRESH
-# ---------------------------------------------------------
 
 auto_refresh = st.checkbox(
     "🔄 Auto Refresh"
@@ -119,16 +91,14 @@ refresh_minutes = st.selectbox(
     disabled=not auto_refresh
 )
 
-
 # =========================================================
-# REQUEST SESSION
+# THREAD LOCAL SESSION
 # =========================================================
 
 thread_local = threading.local()
 
 
 def get_session():
-
     if not hasattr(thread_local, "session"):
 
         session = requests.Session()
@@ -174,25 +144,19 @@ def calculate_rsi(closes, period=14):
 
     loss = -delta.clip(upper=0)
 
-    avg_gain = gain.rolling(
-        period
-    ).mean()
+    avg_gain = gain.rolling(period).mean()
 
-    avg_loss = loss.rolling(
-        period
-    ).mean()
+    avg_loss = loss.rolling(period).mean()
 
     rs = avg_gain / avg_loss
 
-    rsi = 100 - (
-        100 / (1 + rs)
-    )
+    rsi = 100 - (100 / (1 + rs))
 
     return rsi
 
 
 # =========================================================
-# BINANCE SYMBOLS
+# GET BINANCE SYMBOLS
 # =========================================================
 
 @st.cache_data(ttl=300)
@@ -232,7 +196,7 @@ def get_symbols():
 
 
 # =========================================================
-# RSI RANGE CHECK
+# RSI RANGE FILTER
 # =========================================================
 
 def is_in_range(rsi, selected_range):
@@ -293,12 +257,8 @@ def get_coin_rsi(symbol, interval):
         if len(candles) < 16:
             return None
 
-        # -------------------------------------------------
-        # CLOSED CANDLE LOGIC
-        # -------------------------------------------------
-
+        # Use only closed candles
         if use_closed_candles:
-
             candles = candles[:-1]
 
         closes = pd.Series(
@@ -336,10 +296,6 @@ def get_coin_rsi(symbol, interval):
             2
         )
 
-        # -------------------------------------------------
-        # DIRECTION
-        # -------------------------------------------------
-
         if current_rsi > previous_rsi:
 
             direction = "🟢 Rising"
@@ -364,7 +320,7 @@ def get_coin_rsi(symbol, interval):
 
 
 # =========================================================
-# TRADINGVIEW TIMEFRAME
+# TRADINGVIEW URL
 # =========================================================
 
 def get_tradingview_interval(interval):
@@ -381,10 +337,6 @@ def get_tradingview_interval(interval):
         "15"
     )
 
-
-# =========================================================
-# DIRECT FULL TRADINGVIEW CHART
-# =========================================================
 
 def get_tradingview_url(symbol):
 
@@ -425,6 +377,7 @@ def scan_primary(symbols):
     ) as executor:
 
         futures = {
+
             executor.submit(
                 get_coin_rsi,
                 symbol,
@@ -444,11 +397,12 @@ def scan_primary(symbols):
 
                 if data is not None:
 
-                    # Primary RSI range
+                    # RSI range filter
                     if not is_in_range(
                         data["current"],
                         rsi_range
                     ):
+
                         completed += 1
 
                         progress.progress(
@@ -465,8 +419,10 @@ def scan_primary(symbols):
                     # Direction filter
                     if (
                         direction_filter == "Rising"
-                        and data["direction"] != "🟢 Rising"
+                        and data["direction"]
+                        != "🟢 Rising"
                     ):
+
                         completed += 1
 
                         progress.progress(
@@ -482,8 +438,10 @@ def scan_primary(symbols):
 
                     if (
                         direction_filter == "Falling"
-                        and data["direction"] != "🔴 Falling"
+                        and data["direction"]
+                        != "🔴 Falling"
                     ):
+
                         completed += 1
 
                         progress.progress(
@@ -499,15 +457,11 @@ def scan_primary(symbols):
 
                     results.append(
                         {
-                            "Coin":
-                                symbol,
-
+                            "Coin": symbol,
                             "Primary RSI":
                                 data["current"],
-
                             "Previous RSI":
                                 data["previous"],
-
                             "Direction":
                                 data["direction"]
                         }
@@ -562,6 +516,7 @@ def scan_confirmation(
     ) as executor:
 
         futures = {
+
             executor.submit(
                 get_coin_rsi,
                 item["Coin"],
@@ -580,10 +535,6 @@ def scan_confirmation(
                 data = future.result()
 
                 if data is not None:
-
-                    # -------------------------------------------------
-                    # CONFIRMATION RSI RANGE
-                    # -------------------------------------------------
 
                     if not is_in_range(
                         data["current"],
@@ -613,8 +564,7 @@ def scan_confirmation(
 
                     results.append(
                         {
-                            "Coin":
-                                symbol,
+                            "Coin": symbol,
 
                             "Primary RSI":
                                 item["Primary RSI"],
@@ -656,7 +606,7 @@ def scan_confirmation(
 
 
 # =========================================================
-# COMPLETE SCAN
+# COMPLETE BINANCE SCAN
 # =========================================================
 
 def scan_binance():
@@ -700,22 +650,19 @@ def show_results(results):
 
         return
 
-    # ---------------------------------------------------------
-    # SORT BY PRIMARY RSI
-    # ---------------------------------------------------------
-
+    # Sort by primary RSI
     df = df.sort_values(
         "Primary RSI",
         ascending=False
     )
 
-    # ---------------------------------------------------------
-    # CONVERT COIN INTO DIRECT TRADINGVIEW LINK
-    # ---------------------------------------------------------
-
-    df["Coin"] = df["Coin"].apply(
-        lambda symbol:
-        get_tradingview_url(symbol)
+    # Convert coin to TradingView URL
+    df["Coin"] = df.apply(
+        lambda row:
+        get_tradingview_url(
+            row["Coin"]
+        ),
+        axis=1
     )
 
     st.success(
@@ -730,30 +677,35 @@ def show_results(results):
         )
     )
 
-    # ---------------------------------------------------------
-    # TABLE
-    # ---------------------------------------------------------
-
     st.dataframe(
+
         df,
+
         use_container_width=True,
+
         hide_index=True,
 
         column_config={
 
-            # -------------------------------------------------
-            # COIN = DIRECT FULL TRADINGVIEW CHART
-            # -------------------------------------------------
+            # =================================================
+            # COIN NAME WILL BE SHOWN
+            # AND WILL BE CLICKABLE
+            # =================================================
 
             "Coin":
                 st.column_config.LinkColumn(
                     "Coin",
-                    display_text="Open Full Chart 📈"
-                ),
+                    help=(
+                        "Click coin name "
+                        "to open TradingView"
+                    ),
 
-            # -------------------------------------------------
-            # PRIMARY RSI
-            # -------------------------------------------------
+                    display_text=(
+                        r".*symbol=BINANCE%3A(.*?)&interval=.*"
+                    ),
+
+                    pinned=True
+                ),
 
             "Primary RSI":
                 st.column_config.NumberColumn(
@@ -761,38 +713,22 @@ def show_results(results):
                     format="%.2f"
                 ),
 
-            # -------------------------------------------------
-            # PREVIOUS RSI
-            # -------------------------------------------------
-
             "Previous RSI":
                 st.column_config.NumberColumn(
                     "Previous RSI",
                     format="%.2f"
                 ),
 
-            # -------------------------------------------------
-            # DIRECTION
-            # -------------------------------------------------
-
             "Direction":
                 st.column_config.TextColumn(
                     "RSI Direction"
                 ),
-
-            # -------------------------------------------------
-            # CONFIRMATION RSI
-            # -------------------------------------------------
 
             "Confirmation RSI":
                 st.column_config.NumberColumn(
                     f"{confirmation_timeframe} RSI",
                     format="%.2f"
                 ),
-
-            # -------------------------------------------------
-            # TRADINGVIEW BUTTON
-            # -------------------------------------------------
 
             "TradingView":
                 st.column_config.LinkColumn(
