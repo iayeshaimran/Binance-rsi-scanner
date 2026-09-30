@@ -21,7 +21,7 @@ st.set_page_config(
 st.title("📊 Binance RSI + EMA + Heikin Ashi Scanner")
 
 st.caption(
-    "Binance USDT Spot Scanner — RSI + EMA 9/33 + Multi-Timeframe Heikin Ashi"
+    "Binance USDT Spot Scanner"
 )
 
 
@@ -98,7 +98,7 @@ ema_timeframes = st.multiselect(
 )
 
 st.caption(
-    "Signal appears only when EMA 9 actually crosses EMA 33 upward."
+    "Only a fresh bullish cross is shown."
 )
 
 
@@ -129,7 +129,7 @@ ha_min_alignment = st.selectbox(
 )
 
 st.caption(
-    "Bullish HA = 2 consecutive green closed candles + "
+    "HA signal = 2 consecutive green candles + "
     "higher close + higher high + small lower wicks."
 )
 
@@ -196,7 +196,7 @@ def get_session():
 
 
 # =========================================================
-# RSI CALCULATION
+# RSI
 # =========================================================
 
 def calculate_rsi(closes, period=14):
@@ -207,24 +207,29 @@ def calculate_rsi(closes, period=14):
 
     loss = -delta.clip(upper=0)
 
-    avg_gain = gain.rolling(period).mean()
+    avg_gain = gain.rolling(
+        period
+    ).mean()
 
-    avg_loss = loss.rolling(period).mean()
+    avg_loss = loss.rolling(
+        period
+    ).mean()
 
     rs = avg_gain / avg_loss
 
-    rsi = 100 - (
+    return 100 - (
         100 / (1 + rs)
     )
 
-    return rsi
-
 
 # =========================================================
-# EMA CALCULATION
+# EMA
 # =========================================================
 
-def calculate_ema(closes, period):
+def calculate_ema(
+    closes,
+    period
+):
 
     return closes.ewm(
         span=period,
@@ -233,7 +238,7 @@ def calculate_ema(closes, period):
 
 
 # =========================================================
-# GET BINANCE SYMBOLS
+# BINANCE SYMBOLS
 # =========================================================
 
 @st.cache_data(ttl=300)
@@ -271,7 +276,7 @@ def get_symbols():
 
 
 # =========================================================
-# RSI RANGE FILTER
+# RSI RANGE
 # =========================================================
 
 def is_in_range(
@@ -301,7 +306,7 @@ def is_in_range(
 
 
 # =========================================================
-# GET KLINES
+# BINANCE KLINES
 # =========================================================
 
 def get_klines(
@@ -337,21 +342,23 @@ def get_klines(
         if len(candles) < 40:
             return None
 
-        # Remove currently forming candle
         if use_closed_candles:
             candles = candles[:-1]
 
         return candles
 
     except Exception:
+
         return None
 
 
 # =========================================================
-# HEIKIN ASHI CALCULATION
+# HEIKIN ASHI
 # =========================================================
 
-def calculate_heikin_ashi(candles):
+def calculate_heikin_ashi(
+    candles
+):
 
     opens = pd.Series(
         [float(c[1]) for c in candles]
@@ -369,7 +376,6 @@ def calculate_heikin_ashi(candles):
         [float(c[4]) for c in candles]
     )
 
-    # HA Close
     ha_close = (
         opens
         + highs
@@ -377,7 +383,6 @@ def calculate_heikin_ashi(candles):
         + closes
     ) / 4
 
-    # HA Open
     ha_open = pd.Series(
         index=opens.index,
         dtype=float
@@ -388,14 +393,16 @@ def calculate_heikin_ashi(candles):
         + closes.iloc[0]
     ) / 2
 
-    for i in range(1, len(candles)):
+    for i in range(
+        1,
+        len(candles)
+    ):
 
         ha_open.iloc[i] = (
             ha_open.iloc[i - 1]
             + ha_close.iloc[i - 1]
         ) / 2
 
-    # HA High
     ha_high = pd.concat(
         [
             highs,
@@ -405,7 +412,6 @@ def calculate_heikin_ashi(candles):
         axis=1
     ).max(axis=1)
 
-    # HA Low
     ha_low = pd.concat(
         [
             lows,
@@ -442,18 +448,6 @@ def analyze_coin(
         return None
 
     try:
-
-        opens = pd.Series(
-            [float(c[1]) for c in candles]
-        )
-
-        highs = pd.Series(
-            [float(c[2]) for c in candles]
-        )
-
-        lows = pd.Series(
-            [float(c[3]) for c in candles]
-        )
 
         closes = pd.Series(
             [float(c[4]) for c in candles]
@@ -536,7 +530,7 @@ def analyze_coin(
             ema33.iloc[-1]
         )
 
-        # Fresh bullish cross ONLY
+        # Fresh bullish cross
         ema_bullish_cross = (
             previous_ema9 <= previous_ema33
             and
@@ -559,10 +553,7 @@ def analyze_coin(
         first = -2
         second = -1
 
-        # -------------------------------------------------
         # Two green candles
-        # -------------------------------------------------
-
         first_green = (
             ha_close.iloc[first]
             > ha_open.iloc[first]
@@ -573,27 +564,21 @@ def analyze_coin(
             > ha_open.iloc[second]
         )
 
-        # -------------------------------------------------
         # Higher close
-        # -------------------------------------------------
-
         higher_close = (
             ha_close.iloc[second]
             > ha_close.iloc[first]
         )
 
-        # -------------------------------------------------
         # Higher high
-        # -------------------------------------------------
-
         higher_high = (
             ha_high.iloc[second]
             > ha_high.iloc[first]
         )
 
-        # -------------------------------------------------
-        # Lower wick
-        # -------------------------------------------------
+        # =================================================
+        # LOWER WICK
+        # =================================================
 
         first_body = abs(
             ha_close.iloc[first]
@@ -647,9 +632,9 @@ def analyze_coin(
 
             second_wick_ok = False
 
-        # -------------------------------------------------
-        # Final HA bullish signal
-        # -------------------------------------------------
+        # =================================================
+        # FINAL HA SIGNAL
+        # =================================================
 
         ha_bullish_signal = (
             first_green
@@ -693,7 +678,9 @@ def analyze_coin(
 # TRADINGVIEW
 # =========================================================
 
-def get_tradingview_interval(interval):
+def get_tradingview_interval(
+    interval
+):
 
     mapping = {
         "3m": "3",
@@ -775,9 +762,13 @@ def scan_market(
                     result = future.result()
 
                     if result is not None:
-                        results.append(result)
+
+                        results.append(
+                            result
+                        )
 
                 except Exception:
+
                     pass
 
                 completed += 1
@@ -787,8 +778,8 @@ def scan_market(
                 )
 
                 status.write(
-                    f"Scanning {interval} — "
-                    f"{completed}/{total}"
+                    f"Scanning {interval} "
+                    f"— {completed}/{total}"
                 )
 
         market_data[interval] = results
@@ -801,7 +792,7 @@ def scan_market(
 
 
 # =========================================================
-# BUILD RSI RESULTS
+# RSI RESULTS
 # =========================================================
 
 def build_rsi_results(
@@ -874,8 +865,6 @@ def build_rsi_results(
         ):
             continue
 
-        # IMPORTANT:
-        # Coin now contains the actual TradingView URL
         results.append(
             {
                 "Coin":
@@ -908,7 +897,7 @@ def build_rsi_results(
 
 
 # =========================================================
-# BUILD EMA RESULTS
+# EMA RESULTS
 # =========================================================
 
 def build_ema_results(
@@ -919,15 +908,14 @@ def build_ema_results(
 
     for interval in ema_timeframes:
 
-        timeframe_data = market_data.get(
+        for item in market_data.get(
             interval,
             []
-        )
+        ):
 
-        for item in timeframe_data:
-
-            # ONLY fresh bullish cross
-            if not item["ema_bullish_cross"]:
+            if not item[
+                "ema_bullish_cross"
+            ]:
                 continue
 
             symbol = item["symbol"]
@@ -970,20 +958,16 @@ def build_ema_results(
 
 
 # =========================================================
-# BUILD HEIKIN ASHI RESULTS
+# HEIKIN ASHI RESULTS
 # =========================================================
 
 def build_ha_results(
     market_data
 ):
 
-    # ---------------------------------------------
-    # Create map:
-    # symbol -> timeframe -> result
-    # ---------------------------------------------
-
     ha_map = {}
 
+    # Create symbol/timeframe map
     for interval in ha_timeframes:
 
         for item in market_data.get(
@@ -994,32 +978,23 @@ def build_ha_results(
             symbol = item["symbol"]
 
             if symbol not in ha_map:
+
                 ha_map[symbol] = {}
 
             ha_map[symbol][interval] = item
 
     results = []
 
-    # ---------------------------------------------
-    # Process each coin
-    # ---------------------------------------------
-
     for symbol, timeframe_data in ha_map.items():
-
-        row = {}
-
-        # Actual clickable TradingView URL
-        row["Coin"] = get_tradingview_url(
-            symbol,
-            "15m"
-        )
 
         bullish_count = 0
 
         bullish_timeframes = []
 
+        row = {}
+
         # ---------------------------------------------
-        # Each HA timeframe
+        # Check all selected HA timeframes
         # ---------------------------------------------
 
         for interval in ha_timeframes:
@@ -1047,13 +1022,37 @@ def build_ha_results(
                 row[interval] = "⚪"
 
         # ---------------------------------------------
-        # Minimum alignment
+        # Alignment filter
         # ---------------------------------------------
 
         if bullish_count < ha_min_alignment:
+
             continue
 
-        row["Bullish TFs"] = bullish_count
+        # ---------------------------------------------
+        # Coin clickable
+        # ---------------------------------------------
+
+        if bullish_timeframes:
+
+            chart_tf = (
+                bullish_timeframes[0]
+            )
+
+        else:
+
+            chart_tf = "15m"
+
+        row["Coin"] = (
+            get_tradingview_url(
+                symbol,
+                chart_tf
+            )
+        )
+
+        row["Bullish TFs"] = (
+            bullish_count
+        )
 
         row["Alignment"] = (
             f"{bullish_count}/"
@@ -1067,35 +1066,37 @@ def build_ha_results(
         )
 
         # ---------------------------------------------
-        # Price + RSI
+        # Price / RSI
         # ---------------------------------------------
 
-        primary_item = None
+        price_item = None
 
-        for interval in [
+        preferred_timeframes = [
             primary_timeframe,
             "15m",
             "5m",
             "1h",
             "4h"
-        ]:
+        ]
 
-            if interval in timeframe_data:
+        for tf in preferred_timeframes:
 
-                primary_item = (
-                    timeframe_data[interval]
+            if tf in timeframe_data:
+
+                price_item = (
+                    timeframe_data[tf]
                 )
 
                 break
 
-        if primary_item is not None:
+        if price_item is not None:
 
             row["Price"] = (
-                primary_item["price"]
+                price_item["price"]
             )
 
             row["RSI"] = (
-                primary_item["rsi"]
+                price_item["rsi"]
             )
 
         else:
@@ -1103,24 +1104,10 @@ def build_ha_results(
             row["Price"] = None
             row["RSI"] = None
 
-        # ---------------------------------------------
-        # TradingView
-        # ---------------------------------------------
-
-        if bullish_timeframes:
-
-            chart_timeframe = (
-                bullish_timeframes[0]
-            )
-
-        else:
-
-            chart_timeframe = "15m"
-
         row["TradingView"] = (
             get_tradingview_url(
                 symbol,
-                chart_timeframe
+                chart_tf
             )
         )
 
@@ -1130,16 +1117,20 @@ def build_ha_results(
 
 
 # =========================================================
-# SHOW RSI RESULTS
+# DISPLAY RSI
 # =========================================================
 
-def show_rsi_results(results):
+def show_rsi_results(
+    results
+):
 
     st.subheader(
         "📊 RSI Results"
     )
 
-    df = pd.DataFrame(results)
+    df = pd.DataFrame(
+        results
+    )
 
     if df.empty:
 
@@ -1206,16 +1197,20 @@ def show_rsi_results(results):
 
 
 # =========================================================
-# SHOW EMA RESULTS
+# DISPLAY EMA
 # =========================================================
 
-def show_ema_results(results):
+def show_ema_results(
+    results
+):
 
     st.subheader(
         "🟢 EMA 9 / EMA 33 Fresh Bullish Cross"
     )
 
-    df = pd.DataFrame(results)
+    df = pd.DataFrame(
+        results
+    )
 
     if df.empty:
 
@@ -1225,15 +1220,8 @@ def show_ema_results(results):
 
         return
 
-    df = df.sort_values(
-        [
-            "Timeframe",
-            "Coin"
-        ]
-    )
-
     st.success(
-        f"Fresh EMA Bullish Cross: {len(df)}"
+        f"Fresh EMA Crosses: {len(df)}"
     )
 
     st.dataframe(
@@ -1295,16 +1283,20 @@ def show_ema_results(results):
 
 
 # =========================================================
-# SHOW HEIKIN ASHI RESULTS
+# DISPLAY HEIKIN ASHI
 # =========================================================
 
-def show_ha_results(results):
+def show_ha_results(
+    results
+):
 
     st.subheader(
         "🕯️ Multi-Timeframe Heikin Ashi Bullish Alignment"
     )
 
-    df = pd.DataFrame(results)
+    df = pd.DataFrame(
+        results
+    )
 
     if df.empty:
 
@@ -1316,18 +1308,12 @@ def show_ha_results(results):
         return
 
     df = df.sort_values(
-        [
-            "Bullish TFs",
-            "RSI"
-        ],
-        ascending=[
-            False,
-            False
-        ]
+        "Bullish TFs",
+        ascending=False
     )
 
     st.success(
-        f"HA Bullish Alignment: {len(df)} coins"
+        f"HA Results: {len(df)} coins"
     )
 
     column_config = {
@@ -1375,15 +1361,13 @@ def show_ha_results(results):
             )
     }
 
-    # Add 3m / 5m / 15m / 1h / 4h columns
+    # Add HA timeframe columns
     for interval in ha_timeframes:
 
         column_config[interval] = (
             st.column_config.TextColumn(
                 interval,
-                help=(
-                    "🟢 = bullish HA signal"
-                )
+                help="🟢 = Bullish HA signal"
             )
         )
 
@@ -1402,6 +1386,10 @@ def show_ha_results(results):
 def run_scanner():
 
     try:
+
+        # ---------------------------------------------
+        # Get Binance symbols
+        # ---------------------------------------------
 
         symbols = get_symbols()
 
@@ -1424,13 +1412,13 @@ def run_scanner():
             confirmation_timeframe
         )
 
-        for timeframe in ema_timeframes:
+        for tf in ema_timeframes:
 
-            required.add(timeframe)
+            required.add(tf)
 
-        for timeframe in ha_timeframes:
+        for tf in ha_timeframes:
 
-            required.add(timeframe)
+            required.add(tf)
 
         timeframe_order = [
             "3m",
@@ -1447,7 +1435,7 @@ def run_scanner():
         )
 
         # ---------------------------------------------
-        # Scan
+        # Scan Binance
         # ---------------------------------------------
 
         market_data = scan_market(
@@ -1496,12 +1484,12 @@ def run_scanner():
         else:
 
             st.warning(
-                "Please select at least one "
+                "Select at least one "
                 "Heikin Ashi timeframe."
             )
 
         # ---------------------------------------------
-        # Last scan
+        # Scan time
         # ---------------------------------------------
 
         st.caption(
@@ -1515,7 +1503,7 @@ def run_scanner():
 
         st.error(
             "Binance connection error. "
-            "Please try scanning again."
+            "Please try again."
         )
 
     except Exception as error:
@@ -1526,28 +1514,31 @@ def run_scanner():
 
 
 # =========================================================
-# MANUAL SCAN
+# ALWAYS VISIBLE SCAN BUTTON
 # =========================================================
 
-if not auto_refresh:
+st.divider()
 
-    if st.button(
-        "🔍 Scan Now",
-        type="primary"
-    ):
+scan_now = st.button(
+    "🔍 SCAN ALL NOW",
+    type="primary",
+    use_container_width=True
+)
 
-        run_scanner()
+if scan_now:
+
+    run_scanner()
 
 
 # =========================================================
-# AUTO SCAN
+# AUTO REFRESH
 # =========================================================
 
 if auto_refresh:
 
     st.info(
         f"🔄 Auto Refresh ON — "
-        f"Every {refresh_minutes} minutes"
+        f"Automatic scan every {refresh_minutes} minutes."
     )
 
     @st.fragment(
