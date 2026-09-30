@@ -19,10 +19,49 @@ st.set_page_config(
 )
 
 st.title("📊 Binance RSI + EMA + Heikin Ashi Scanner")
+st.caption("Binance USDT Spot Scanner")
 
-st.caption(
-    "Binance USDT Spot Scanner"
-)
+
+# =========================================================
+# THREAD SESSION
+# =========================================================
+
+thread_local = threading.local()
+
+
+def get_session():
+
+    if not hasattr(thread_local, "session"):
+
+        session = requests.Session()
+
+        retry = Retry(
+            total=2,
+            connect=2,
+            read=2,
+            backoff_factor=0.5,
+            status_forcelist=[
+                429,
+                500,
+                502,
+                503,
+                504
+            ],
+            allowed_methods=["GET"]
+        )
+
+        adapter = HTTPAdapter(
+            max_retries=retry
+        )
+
+        session.mount(
+            "https://",
+            adapter
+        )
+
+        thread_local.session = session
+
+    return thread_local.session
 
 
 # =========================================================
@@ -98,7 +137,7 @@ ema_timeframes = st.multiselect(
 )
 
 st.caption(
-    "Only a fresh bullish cross is shown."
+    "Only a fresh bullish EMA 9/33 cross is shown."
 )
 
 
@@ -138,7 +177,7 @@ st.caption(
 # REFRESH SETTINGS
 # =========================================================
 
-st.header("🔄 Refresh Settings")
+st.header("🔄 Refresh")
 
 auto_refresh = st.checkbox(
     "Auto Refresh",
@@ -151,48 +190,6 @@ refresh_minutes = st.selectbox(
     index=1,
     disabled=not auto_refresh
 )
-
-
-# =========================================================
-# THREAD LOCAL SESSION
-# =========================================================
-
-thread_local = threading.local()
-
-
-def get_session():
-
-    if not hasattr(thread_local, "session"):
-
-        session = requests.Session()
-
-        retry = Retry(
-            total=2,
-            connect=2,
-            read=2,
-            backoff_factor=0.5,
-            status_forcelist=[
-                429,
-                500,
-                502,
-                503,
-                504
-            ],
-            allowed_methods=["GET"]
-        )
-
-        adapter = HTTPAdapter(
-            max_retries=retry
-        )
-
-        session.mount(
-            "https://",
-            adapter
-        )
-
-        thread_local.session = session
-
-    return thread_local.session
 
 
 # =========================================================
@@ -276,7 +273,7 @@ def get_symbols():
 
 
 # =========================================================
-# RSI RANGE
+# RSI RANGE FILTER
 # =========================================================
 
 def is_in_range(
@@ -306,7 +303,7 @@ def is_in_range(
 
 
 # =========================================================
-# BINANCE KLINES
+# GET KLINES
 # =========================================================
 
 def get_klines(
@@ -468,12 +465,12 @@ def analyze_coin(
 
         if (
             pd.isna(current_rsi)
-            or pd.isna(previous_rsi)
+            or
+            pd.isna(previous_rsi)
         ):
 
             current_rsi = None
             previous_rsi = None
-
             direction = "⚪ Flat"
 
         else:
@@ -553,7 +550,6 @@ def analyze_coin(
         first = -2
         second = -1
 
-        # Two green candles
         first_green = (
             ha_close.iloc[first]
             > ha_open.iloc[first]
@@ -564,13 +560,11 @@ def analyze_coin(
             > ha_open.iloc[second]
         )
 
-        # Higher close
         higher_close = (
             ha_close.iloc[second]
             > ha_close.iloc[first]
         )
 
-        # Higher high
         higher_high = (
             ha_high.iloc[second]
             > ha_high.iloc[first]
@@ -632,10 +626,6 @@ def analyze_coin(
 
             second_wick_ok = False
 
-        # =================================================
-        # FINAL HA SIGNAL
-        # =================================================
-
         ha_bullish_signal = (
             first_green
             and
@@ -654,17 +644,13 @@ def analyze_coin(
             "symbol": symbol,
             "interval": interval,
             "price": float(closes.iloc[-1]),
-
             "rsi": current_rsi,
             "previous_rsi": previous_rsi,
             "direction": direction,
-
             "ema9": current_ema9,
             "ema33": current_ema33,
-
             "ema_bullish_cross":
                 ema_bullish_cross,
-
             "ha_bullish_signal":
                 ha_bullish_signal
         }
@@ -675,7 +661,7 @@ def analyze_coin(
 
 
 # =========================================================
-# TRADINGVIEW
+# TRADINGVIEW URL
 # =========================================================
 
 def get_tradingview_interval(
@@ -749,7 +735,6 @@ def scan_market(
                     symbol,
                     interval
                 ): symbol
-
                 for symbol in symbols
             }
 
@@ -762,13 +747,9 @@ def scan_market(
                     result = future.result()
 
                     if result is not None:
-
-                        results.append(
-                            result
-                        )
+                        results.append(result)
 
                 except Exception:
-
                     pass
 
                 completed += 1
@@ -785,14 +766,13 @@ def scan_market(
         market_data[interval] = results
 
     progress.empty()
-
     status.empty()
 
     return market_data
 
 
 # =========================================================
-# RSI RESULTS
+# BUILD RSI RESULTS
 # =========================================================
 
 def build_rsi_results(
@@ -819,7 +799,6 @@ def build_rsi_results(
     for item in primary_data:
 
         symbol = item["symbol"]
-
         rsi = item["rsi"]
 
         if rsi is None:
@@ -897,7 +876,7 @@ def build_rsi_results(
 
 
 # =========================================================
-# EMA RESULTS
+# BUILD EMA RESULTS
 # =========================================================
 
 def build_ema_results(
@@ -958,7 +937,7 @@ def build_ema_results(
 
 
 # =========================================================
-# HEIKIN ASHI RESULTS
+# BUILD HA RESULTS
 # =========================================================
 
 def build_ha_results(
@@ -967,7 +946,6 @@ def build_ha_results(
 
     ha_map = {}
 
-    # Create symbol/timeframe map
     for interval in ha_timeframes:
 
         for item in market_data.get(
@@ -978,7 +956,6 @@ def build_ha_results(
             symbol = item["symbol"]
 
             if symbol not in ha_map:
-
                 ha_map[symbol] = {}
 
             ha_map[symbol][interval] = item
@@ -987,16 +964,13 @@ def build_ha_results(
 
     for symbol, timeframe_data in ha_map.items():
 
+        row = {}
+
         bullish_count = 0
 
         bullish_timeframes = []
 
-        row = {}
-
-        # ---------------------------------------------
-        # Check all selected HA timeframes
-        # ---------------------------------------------
-
+        # Check every HA timeframe
         for interval in ha_timeframes:
 
             item = timeframe_data.get(
@@ -1021,17 +995,9 @@ def build_ha_results(
 
                 row[interval] = "⚪"
 
-        # ---------------------------------------------
-        # Alignment filter
-        # ---------------------------------------------
-
+        # Minimum alignment filter
         if bullish_count < ha_min_alignment:
-
             continue
-
-        # ---------------------------------------------
-        # Coin clickable
-        # ---------------------------------------------
 
         if bullish_timeframes:
 
@@ -1043,6 +1009,7 @@ def build_ha_results(
 
             chart_tf = "15m"
 
+        # Clickable Coin
         row["Coin"] = (
             get_tradingview_url(
                 symbol,
@@ -1065,10 +1032,7 @@ def build_ha_results(
             )
         )
 
-        # ---------------------------------------------
         # Price / RSI
-        # ---------------------------------------------
-
         price_item = None
 
         preferred_timeframes = [
@@ -1117,7 +1081,7 @@ def build_ha_results(
 
 
 # =========================================================
-# DISPLAY RSI
+# DISPLAY RSI RESULTS
 # =========================================================
 
 def show_rsi_results(
@@ -1128,9 +1092,7 @@ def show_rsi_results(
         "📊 RSI Results"
     )
 
-    df = pd.DataFrame(
-        results
-    )
+    df = pd.DataFrame(results)
 
     if df.empty:
 
@@ -1197,7 +1159,7 @@ def show_rsi_results(
 
 
 # =========================================================
-# DISPLAY EMA
+# DISPLAY EMA RESULTS
 # =========================================================
 
 def show_ema_results(
@@ -1208,9 +1170,7 @@ def show_ema_results(
         "🟢 EMA 9 / EMA 33 Fresh Bullish Cross"
     )
 
-    df = pd.DataFrame(
-        results
-    )
+    df = pd.DataFrame(results)
 
     if df.empty:
 
@@ -1283,7 +1243,7 @@ def show_ema_results(
 
 
 # =========================================================
-# DISPLAY HEIKIN ASHI
+# DISPLAY HA RESULTS
 # =========================================================
 
 def show_ha_results(
@@ -1291,12 +1251,10 @@ def show_ha_results(
 ):
 
     st.subheader(
-        "🕯️ Multi-Timeframe Heikin Ashi Bullish Alignment"
+        "🕯️ Multi-Timeframe Heikin Ashi"
     )
 
-    df = pd.DataFrame(
-        results
-    )
+    df = pd.DataFrame(results)
 
     if df.empty:
 
@@ -1361,7 +1319,6 @@ def show_ha_results(
             )
     }
 
-    # Add HA timeframe columns
     for interval in ha_timeframes:
 
         column_config[interval] = (
@@ -1380,16 +1337,12 @@ def show_ha_results(
 
 
 # =========================================================
-# MAIN SCANNER
+# SCANNER
 # =========================================================
 
 def run_scanner():
 
     try:
-
-        # ---------------------------------------------
-        # Get Binance symbols
-        # ---------------------------------------------
 
         symbols = get_symbols()
 
@@ -1413,11 +1366,9 @@ def run_scanner():
         )
 
         for tf in ema_timeframes:
-
             required.add(tf)
 
         for tf in ha_timeframes:
-
             required.add(tf)
 
         timeframe_order = [
@@ -1435,7 +1386,7 @@ def run_scanner():
         )
 
         # ---------------------------------------------
-        # Scan Binance
+        # Scan everything
         # ---------------------------------------------
 
         market_data = scan_market(
@@ -1488,10 +1439,6 @@ def run_scanner():
                 "Heikin Ashi timeframe."
             )
 
-        # ---------------------------------------------
-        # Scan time
-        # ---------------------------------------------
-
         st.caption(
             "Last scan: "
             + datetime.now().strftime(
@@ -1514,8 +1461,10 @@ def run_scanner():
 
 
 # =========================================================
-# ALWAYS VISIBLE SCAN BUTTON
+# SCAN BUTTON
 # =========================================================
+# This button is intentionally placed after RSI settings
+# and before EMA / HA sections.
 
 st.divider()
 
@@ -1536,9 +1485,11 @@ if scan_now:
 
 if auto_refresh:
 
+    st.divider()
+
     st.info(
         f"🔄 Auto Refresh ON — "
-        f"Automatic scan every {refresh_minutes} minutes."
+        f"Every {refresh_minutes} minutes"
     )
 
     @st.fragment(
