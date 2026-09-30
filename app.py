@@ -13,30 +13,35 @@ from urllib.parse import quote
 # =========================================================
 
 st.set_page_config(
-    page_title="Binance RSI Scanner",
+    page_title="Binance RSI + EMA Scanner",
     page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 Binance RSI Scanner")
+st.title("📊 Binance RSI + EMA Scanner")
+
 st.caption(
-    "Binance USDT Spot RSI Scanner with multi-timeframe confirmation"
+    "Binance USDT Spot Scanner — RSI Multi-Timeframe + EMA 9/33 Bullish Cross"
 )
 
 # =========================================================
-# FILTERS
+# RSI SETTINGS
 # =========================================================
+
+st.header("📊 RSI Scanner")
 
 timeframe = st.selectbox(
     "Select Primary Timeframe",
     ["5m", "15m", "1h", "4h"],
-    index=1
+    index=1,
+    key="rsi_primary_tf"
 )
 
 confirmation_timeframe = st.selectbox(
     "Select Confirmation Timeframe",
     ["5m", "15m", "1h", "4h"],
-    index=0
+    index=0,
+    key="rsi_confirmation_tf"
 )
 
 rsi_range = st.selectbox(
@@ -80,8 +85,31 @@ use_closed_candles = st.checkbox(
     value=True
 )
 
+# =========================================================
+# EMA SETTINGS
+# =========================================================
+
+st.header("🟢 EMA 9 / EMA 33 Bullish Cross")
+
+ema_timeframes = st.multiselect(
+    "EMA Bullish Cross Timeframes",
+    ["5m", "15m", "1h", "4h"],
+    default=["5m", "15m", "1h", "4h"]
+)
+
+st.caption(
+    "Only fresh bullish crosses are shown: "
+    "EMA 9 crosses from below EMA 33 to above EMA 33."
+)
+
+# =========================================================
+# REFRESH SETTINGS
+# =========================================================
+
+st.header("🔄 Scanner Refresh")
+
 auto_refresh = st.checkbox(
-    "🔄 Auto Refresh"
+    "Auto Refresh"
 )
 
 refresh_minutes = st.selectbox(
@@ -99,6 +127,7 @@ thread_local = threading.local()
 
 
 def get_session():
+
     if not hasattr(thread_local, "session"):
 
         session = requests.Session()
@@ -156,6 +185,18 @@ def calculate_rsi(closes, period=14):
 
 
 # =========================================================
+# EMA CALCULATION
+# =========================================================
+
+def calculate_ema(closes, period):
+
+    return closes.ewm(
+        span=period,
+        adjust=False
+    ).mean()
+
+
+# =========================================================
 # GET BINANCE SYMBOLS
 # =========================================================
 
@@ -196,10 +237,13 @@ def get_symbols():
 
 
 # =========================================================
-# RSI RANGE FILTER
+# RSI RANGE
 # =========================================================
 
-def is_in_range(rsi, selected_range):
+def is_in_range(
+    rsi,
+    selected_range
+):
 
     if selected_range == "All":
         return True
@@ -223,10 +267,14 @@ def is_in_range(rsi, selected_range):
 
 
 # =========================================================
-# GET COIN RSI
+# GET KLINES
 # =========================================================
 
-def get_coin_rsi(symbol, interval):
+def get_klines(
+    symbol,
+    interval,
+    limit=100
+):
 
     url = (
         "https://data-api.binance.vision"
@@ -236,7 +284,7 @@ def get_coin_rsi(symbol, interval):
     params = {
         "symbol": symbol,
         "interval": interval,
-        "limit": 100
+        "limit": limit
     }
 
     try:
@@ -254,12 +302,39 @@ def get_coin_rsi(symbol, interval):
 
         candles = response.json()
 
-        if len(candles) < 16:
+        if len(candles) < 40:
             return None
 
-        # Use only closed candles
+        # Remove current unfinished candle
         if use_closed_candles:
             candles = candles[:-1]
+
+        return candles
+
+    except Exception:
+
+        return None
+
+
+# =========================================================
+# GET RSI
+# =========================================================
+
+def get_coin_rsi(
+    symbol,
+    interval
+):
+
+    candles = get_klines(
+        symbol,
+        interval,
+        100
+    )
+
+    if candles is None:
+        return None
+
+    try:
 
         closes = pd.Series(
             [
@@ -320,10 +395,102 @@ def get_coin_rsi(symbol, interval):
 
 
 # =========================================================
-# TRADINGVIEW URL
+# EMA BULLISH CROSS
 # =========================================================
 
-def get_tradingview_interval(interval):
+def get_ema_bullish_cross(
+    symbol,
+    interval
+):
+
+    candles = get_klines(
+        symbol,
+        interval,
+        100
+    )
+
+    if candles is None:
+        return None
+
+    try:
+
+        closes = pd.Series(
+            [
+                float(candle[4])
+                for candle in candles
+            ]
+        )
+
+        if len(closes) < 35:
+            return None
+
+        ema9 = calculate_ema(
+            closes,
+            9
+        )
+
+        ema33 = calculate_ema(
+            closes,
+            33
+        )
+
+        # Previous closed candle
+        previous_ema9 = float(
+            ema9.iloc[-2]
+        )
+
+        previous_ema33 = float(
+            ema33.iloc[-2]
+        )
+
+        # Latest closed candle
+        current_ema9 = float(
+            ema9.iloc[-1]
+        )
+
+        current_ema33 = float(
+            ema33.iloc[-1]
+        )
+
+        # Fresh bullish crossover:
+        #
+        # Previous:
+        # EMA9 <= EMA33
+        #
+        # Current:
+        # EMA9 > EMA33
+
+        bullish_cross = (
+            previous_ema9 <= previous_ema33
+            and
+            current_ema9 > current_ema33
+        )
+
+        if not bullish_cross:
+            return None
+
+        current_price = float(
+            closes.iloc[-1]
+        )
+
+        return {
+            "price": current_price,
+            "ema9": current_ema9,
+            "ema33": current_ema33
+        }
+
+    except Exception:
+
+        return None
+
+
+# =========================================================
+# TRADINGVIEW
+# =========================================================
+
+def get_tradingview_interval(
+    interval
+):
 
     mapping = {
         "5m": "5",
@@ -338,10 +505,13 @@ def get_tradingview_interval(interval):
     )
 
 
-def get_tradingview_url(symbol):
+def get_tradingview_url(
+    symbol,
+    interval
+):
 
     tv_interval = get_tradingview_interval(
-        timeframe
+        interval
     )
 
     encoded_symbol = quote(
@@ -357,10 +527,12 @@ def get_tradingview_url(symbol):
 
 
 # =========================================================
-# PRIMARY SCAN
+# PRIMARY RSI SCAN
 # =========================================================
 
-def scan_primary(symbols):
+def scan_primary(
+    symbols
+):
 
     results = []
 
@@ -387,9 +559,13 @@ def scan_primary(symbols):
             for symbol in symbols
         }
 
-        for future in as_completed(futures):
+        for future in as_completed(
+            futures
+        ):
 
-            symbol = futures[future]
+            symbol = futures[
+                future
+            ]
 
             try:
 
@@ -397,7 +573,6 @@ def scan_primary(symbols):
 
                 if data is not None:
 
-                    # RSI range filter
                     if not is_in_range(
                         data["current"],
                         rsi_range
@@ -409,17 +584,13 @@ def scan_primary(symbols):
                             completed / total
                         )
 
-                        status.write(
-                            f"Primary scan: "
-                            f"{completed}/{total}"
-                        )
-
                         continue
 
-                    # Direction filter
                     if (
-                        direction_filter == "Rising"
-                        and data["direction"]
+                        direction_filter
+                        == "Rising"
+                        and
+                        data["direction"]
                         != "🟢 Rising"
                     ):
 
@@ -429,16 +600,13 @@ def scan_primary(symbols):
                             completed / total
                         )
 
-                        status.write(
-                            f"Primary scan: "
-                            f"{completed}/{total}"
-                        )
-
                         continue
 
                     if (
-                        direction_filter == "Falling"
-                        and data["direction"]
+                        direction_filter
+                        == "Falling"
+                        and
+                        data["direction"]
                         != "🔴 Falling"
                     ):
 
@@ -448,20 +616,19 @@ def scan_primary(symbols):
                             completed / total
                         )
 
-                        status.write(
-                            f"Primary scan: "
-                            f"{completed}/{total}"
-                        )
-
                         continue
 
                     results.append(
                         {
-                            "Coin": symbol,
+                            "Coin":
+                                symbol,
+
                             "Primary RSI":
                                 data["current"],
+
                             "Previous RSI":
                                 data["previous"],
+
                             "Direction":
                                 data["direction"]
                         }
@@ -490,7 +657,7 @@ def scan_primary(symbols):
 
 
 # =========================================================
-# CONFIRMATION SCAN
+# CONFIRMATION RSI SCAN
 # =========================================================
 
 def scan_confirmation(
@@ -498,7 +665,6 @@ def scan_confirmation(
 ):
 
     if not primary_results:
-
         return []
 
     results = []
@@ -526,9 +692,13 @@ def scan_confirmation(
             for item in primary_results
         }
 
-        for future in as_completed(futures):
+        for future in as_completed(
+            futures
+        ):
 
-            item = futures[future]
+            item = futures[
+                future
+            ]
 
             try:
 
@@ -547,39 +717,42 @@ def scan_confirmation(
                             completed / total
                         )
 
-                        status.write(
-                            f"Confirmation scan: "
-                            f"{completed}/{total}"
-                        )
-
                         continue
 
-                    symbol = item["Coin"]
-
-                    tradingview_url = (
-                        get_tradingview_url(
-                            symbol
-                        )
-                    )
+                    symbol = item[
+                        "Coin"
+                    ]
 
                     results.append(
                         {
-                            "Coin": symbol,
+                            "Coin":
+                                symbol,
 
                             "Primary RSI":
-                                item["Primary RSI"],
+                                item[
+                                    "Primary RSI"
+                                ],
 
                             "Previous RSI":
-                                item["Previous RSI"],
+                                item[
+                                    "Previous RSI"
+                                ],
 
                             "Direction":
-                                item["Direction"],
+                                item[
+                                    "Direction"
+                                ],
 
                             "Confirmation RSI":
-                                data["current"],
+                                data[
+                                    "current"
+                                ],
 
                             "TradingView":
-                                tradingview_url
+                                get_tradingview_url(
+                                    symbol,
+                                    timeframe
+                                )
                         }
                     )
 
@@ -606,75 +779,197 @@ def scan_confirmation(
 
 
 # =========================================================
-# COMPLETE BINANCE SCAN
+# EMA MULTI-TIMEFRAME SCAN
 # =========================================================
 
-def scan_binance():
+def scan_ema_bullish(
+    symbols,
+    selected_timeframes
+):
 
-    symbols = get_symbols()
+    all_results = []
 
-    st.info(
-        f"Found {len(symbols)} "
-        f"Binance USDT Spot pairs."
+    if not selected_timeframes:
+
+        return all_results
+
+    total_tasks = (
+        len(symbols)
+        *
+        len(selected_timeframes)
     )
 
-    primary_results = scan_primary(
-        symbols
-    )
+    progress = st.progress(0)
 
-    st.info(
-        f"Primary RSI matched "
-        f"{len(primary_results)} coins."
-    )
+    status = st.empty()
 
-    results = scan_confirmation(
-        primary_results
-    )
+    completed = 0
 
-    return results
+    with ThreadPoolExecutor(
+        max_workers=20
+    ) as executor:
+
+        futures = {}
+
+        for interval in selected_timeframes:
+
+            for symbol in symbols:
+
+                future = executor.submit(
+                    get_ema_bullish_cross,
+                    symbol,
+                    interval
+                )
+
+                futures[
+                    future
+                ] = (
+                    symbol,
+                    interval
+                )
+
+        for future in as_completed(
+            futures
+        ):
+
+            symbol, interval = futures[
+                future
+            ]
+
+            try:
+
+                data = future.result()
+
+                if data is not None:
+
+                    # Get RSI for the same timeframe
+                    rsi_data = get_coin_rsi(
+                        symbol,
+                        interval
+                    )
+
+                    if rsi_data is not None:
+
+                        rsi_value = (
+                            rsi_data["current"]
+                        )
+
+                    else:
+
+                        rsi_value = None
+
+                    all_results.append(
+                        {
+                            "Coin":
+                                symbol,
+
+                            "Timeframe":
+                                interval,
+
+                            "Signal":
+                                "🟢 Bullish EMA Cross",
+
+                            "Price":
+                                round(
+                                    data[
+                                        "price"
+                                    ],
+                                    8
+                                ),
+
+                            "EMA 9":
+                                round(
+                                    data[
+                                        "ema9"
+                                    ],
+                                    8
+                                ),
+
+                            "EMA 33":
+                                round(
+                                    data[
+                                        "ema33"
+                                    ],
+                                    8
+                                ),
+
+                            "RSI":
+                                rsi_value,
+
+                            "TradingView":
+                                get_tradingview_url(
+                                    symbol,
+                                    interval
+                                )
+                        }
+                    )
+
+            except Exception:
+
+                pass
+
+            completed += 1
+
+            progress.progress(
+                completed / total_tasks
+            )
+
+            status.write(
+                f"EMA scan: "
+                f"{completed}/{total_tasks}"
+            )
+
+    progress.empty()
+
+    status.empty()
+
+    return all_results
 
 
 # =========================================================
-# SHOW RESULTS
+# SHOW RSI RESULTS
 # =========================================================
 
-def show_results(results):
+def show_rsi_results(
+    results
+):
 
-    df = pd.DataFrame(results)
+    st.subheader(
+        "📊 RSI Results"
+    )
+
+    df = pd.DataFrame(
+        results
+    )
 
     if df.empty:
 
         st.warning(
-            "No coins found."
+            "No RSI coins found."
         )
 
         return
 
-    # Sort by primary RSI
     df = df.sort_values(
         "Primary RSI",
         ascending=False
     )
 
-    # Convert coin to TradingView URL
-    df["Coin"] = df.apply(
-        lambda row:
+    # Save original coin names
+    coin_names = df["Coin"].copy()
+
+    # Convert to TradingView URLs
+    df["Coin"] = [
         get_tradingview_url(
-            row["Coin"]
-        ),
-        axis=1
-    )
+            symbol,
+            timeframe
+        )
+        for symbol in coin_names
+    ]
 
     st.success(
-        f"Scan completed! "
+        f"RSI scan completed! "
         f"Found {len(df)} coins."
-    )
-
-    st.caption(
-        "Last updated: "
-        + datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
     )
 
     st.dataframe(
@@ -687,128 +982,11 @@ def show_results(results):
 
         column_config={
 
-            # =================================================
-            # COIN NAME WILL BE SHOWN
-            # AND WILL BE CLICKABLE
-            # =================================================
-
             "Coin":
                 st.column_config.LinkColumn(
                     "Coin",
-                    help=(
-                        "Click coin name "
-                        "to open TradingView"
-                    ),
-
                     display_text=(
                         r".*symbol=BINANCE%3A(.*?)&interval=.*"
                     ),
-
                     pinned=True
                 ),
-
-            "Primary RSI":
-                st.column_config.NumberColumn(
-                    f"{timeframe} RSI",
-                    format="%.2f"
-                ),
-
-            "Previous RSI":
-                st.column_config.NumberColumn(
-                    "Previous RSI",
-                    format="%.2f"
-                ),
-
-            "Direction":
-                st.column_config.TextColumn(
-                    "RSI Direction"
-                ),
-
-            "Confirmation RSI":
-                st.column_config.NumberColumn(
-                    f"{confirmation_timeframe} RSI",
-                    format="%.2f"
-                ),
-
-            "TradingView":
-                st.column_config.LinkColumn(
-                    "TradingView",
-                    display_text="Open Chart 🔗"
-                )
-        }
-    )
-
-
-# =========================================================
-# MANUAL SCAN
-# =========================================================
-
-if not auto_refresh:
-
-    if st.button(
-        "🔍 Scan Binance",
-        type="primary"
-    ):
-
-        try:
-
-            results = scan_binance()
-
-            show_results(
-                results
-            )
-
-        except requests.RequestException:
-
-            st.error(
-                "Binance connection timed out. "
-                "Please try again."
-            )
-
-        except Exception as error:
-
-            st.error(
-                f"Scanner error: {error}"
-            )
-
-
-# =========================================================
-# AUTO REFRESH
-# =========================================================
-
-if auto_refresh:
-
-    st.info(
-        f"🔄 Auto Refresh ON — "
-        f"scanner refreshes every "
-        f"{refresh_minutes} minutes."
-    )
-
-    @st.fragment(
-        run_every=f"{refresh_minutes}m"
-    )
-    def automatic_scanner():
-
-        try:
-
-            results = scan_binance()
-
-            show_results(
-                results
-            )
-
-        except requests.RequestException:
-
-            st.warning(
-                "Binance temporarily timed out. "
-                "The next scan will retry."
-            )
-
-        except Exception as error:
-
-            st.warning(
-                f"Temporary scanner issue: "
-                f"{error}"
-            )
-
-    automatic_scanner()
