@@ -6,7 +6,7 @@ from datetime import datetime
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import threading
-from urllib.parse import quote
+
 
 # =========================================================
 # PAGE SETTINGS
@@ -21,8 +21,9 @@ st.set_page_config(
 st.title("📊 Binance RSI + EMA Scanner")
 
 st.caption(
-    "Binance USDT Spot Scanner — RSI Multi-Timeframe + EMA 9/33 Bullish Cross"
+    "Binance USDT Spot Scanner — RSI + EMA 9/33 Bullish Cross"
 )
+
 
 # =========================================================
 # RSI SETTINGS
@@ -30,21 +31,19 @@ st.caption(
 
 st.header("📊 RSI Scanner")
 
-timeframe = st.selectbox(
+primary_timeframe = st.selectbox(
     "Select Primary Timeframe",
     ["5m", "15m", "1h", "4h"],
-    index=1,
-    key="rsi_primary_tf"
+    index=1
 )
 
 confirmation_timeframe = st.selectbox(
     "Select Confirmation Timeframe",
     ["5m", "15m", "1h", "4h"],
-    index=0,
-    key="rsi_confirmation_tf"
+    index=0
 )
 
-rsi_range = st.selectbox(
+primary_rsi_range = st.selectbox(
     "Select Primary RSI Range",
     [
         "All",
@@ -85,6 +84,7 @@ use_closed_candles = st.checkbox(
     value=True
 )
 
+
 # =========================================================
 # EMA SETTINGS
 # =========================================================
@@ -98,9 +98,11 @@ ema_timeframes = st.multiselect(
 )
 
 st.caption(
-    "Only fresh bullish crosses are shown: "
-    "EMA 9 crosses from below EMA 33 to above EMA 33."
+    "Only a fresh bullish cross is shown: "
+    "EMA 9 was below/equal to EMA 33 on the previous candle "
+    "and is above EMA 33 on the latest closed candle."
 )
+
 
 # =========================================================
 # REFRESH SETTINGS
@@ -119,8 +121,9 @@ refresh_minutes = st.selectbox(
     disabled=not auto_refresh
 )
 
+
 # =========================================================
-# THREAD LOCAL SESSION
+# THREAD LOCAL REQUEST SESSION
 # =========================================================
 
 thread_local = threading.local()
@@ -165,7 +168,10 @@ def get_session():
 # RSI CALCULATION
 # =========================================================
 
-def calculate_rsi(closes, period=14):
+def calculate_rsi(
+    closes,
+    period=14
+):
 
     delta = closes.diff()
 
@@ -173,13 +179,19 @@ def calculate_rsi(closes, period=14):
 
     loss = -delta.clip(upper=0)
 
-    avg_gain = gain.rolling(period).mean()
+    avg_gain = gain.rolling(
+        period
+    ).mean()
 
-    avg_loss = loss.rolling(period).mean()
+    avg_loss = loss.rolling(
+        period
+    ).mean()
 
     rs = avg_gain / avg_loss
 
-    rsi = 100 - (100 / (1 + rs))
+    rsi = 100 - (
+        100 / (1 + rs)
+    )
 
     return rsi
 
@@ -188,12 +200,45 @@ def calculate_rsi(closes, period=14):
 # EMA CALCULATION
 # =========================================================
 
-def calculate_ema(closes, period):
+def calculate_ema(
+    closes,
+    period
+):
 
     return closes.ewm(
         span=period,
         adjust=False
     ).mean()
+
+
+# =========================================================
+# RSI RANGE FILTER
+# =========================================================
+
+def is_in_range(
+    rsi,
+    selected_range
+):
+
+    if selected_range == "All":
+        return True
+
+    if selected_range == "40 - 50":
+        return 40 <= rsi < 50
+
+    if selected_range == "50 - 55":
+        return 50 <= rsi < 55
+
+    if selected_range == "55 - 60":
+        return 55 <= rsi < 60
+
+    if selected_range == "60 - 70":
+        return 60 <= rsi < 70
+
+    if selected_range == "70+":
+        return rsi >= 70
+
+    return False
 
 
 # =========================================================
@@ -237,36 +282,6 @@ def get_symbols():
 
 
 # =========================================================
-# RSI RANGE
-# =========================================================
-
-def is_in_range(
-    rsi,
-    selected_range
-):
-
-    if selected_range == "All":
-        return True
-
-    if selected_range == "40 - 50":
-        return 40 <= rsi < 50
-
-    if selected_range == "50 - 55":
-        return 50 <= rsi < 55
-
-    if selected_range == "55 - 60":
-        return 55 <= rsi < 60
-
-    if selected_range == "60 - 70":
-        return 60 <= rsi < 70
-
-    if selected_range == "70+":
-        return rsi >= 70
-
-    return False
-
-
-# =========================================================
 # GET KLINES
 # =========================================================
 
@@ -305,7 +320,7 @@ def get_klines(
         if len(candles) < 40:
             return None
 
-        # Remove current unfinished candle
+        # Remove currently forming candle
         if use_closed_candles:
             candles = candles[:-1]
 
@@ -317,88 +332,10 @@ def get_klines(
 
 
 # =========================================================
-# GET RSI
+# ANALYZE ONE COIN / ONE TIMEFRAME
 # =========================================================
 
-def get_coin_rsi(
-    symbol,
-    interval
-):
-
-    candles = get_klines(
-        symbol,
-        interval,
-        100
-    )
-
-    if candles is None:
-        return None
-
-    try:
-
-        closes = pd.Series(
-            [
-                float(candle[4])
-                for candle in candles
-            ]
-        )
-
-        if len(closes) < 16:
-            return None
-
-        rsi = calculate_rsi(
-            closes,
-            14
-        )
-
-        current_rsi = rsi.iloc[-1]
-
-        previous_rsi = rsi.iloc[-2]
-
-        if (
-            pd.isna(current_rsi)
-            or pd.isna(previous_rsi)
-        ):
-            return None
-
-        current_rsi = round(
-            float(current_rsi),
-            2
-        )
-
-        previous_rsi = round(
-            float(previous_rsi),
-            2
-        )
-
-        if current_rsi > previous_rsi:
-
-            direction = "🟢 Rising"
-
-        elif current_rsi < previous_rsi:
-
-            direction = "🔴 Falling"
-
-        else:
-
-            direction = "⚪ Flat"
-
-        return {
-            "current": current_rsi,
-            "previous": previous_rsi,
-            "direction": direction
-        }
-
-    except Exception:
-
-        return None
-
-
-# =========================================================
-# EMA BULLISH CROSS
-# =========================================================
-
-def get_ema_bullish_cross(
+def analyze_coin(
     symbol,
     interval
 ):
@@ -424,17 +361,70 @@ def get_ema_bullish_cross(
         if len(closes) < 35:
             return None
 
+        # -----------------------------
+        # RSI
+        # -----------------------------
+
+        rsi = calculate_rsi(
+            closes,
+            14
+        )
+
+        current_rsi = rsi.iloc[-1]
+
+        previous_rsi = rsi.iloc[-2]
+
+        if (
+            pd.isna(current_rsi)
+            or pd.isna(previous_rsi)
+        ):
+
+            current_rsi = None
+            previous_rsi = None
+            direction = "⚪ Flat"
+
+        else:
+
+            current_rsi = round(
+                float(current_rsi),
+                2
+            )
+
+            previous_rsi = round(
+                float(previous_rsi),
+                2
+            )
+
+            if current_rsi > previous_rsi:
+
+                direction = "🟢 Rising"
+
+            elif current_rsi < previous_rsi:
+
+                direction = "🔴 Falling"
+
+            else:
+
+                direction = "⚪ Flat"
+
+        # -----------------------------
+        # EMA 9
+        # -----------------------------
+
         ema9 = calculate_ema(
             closes,
             9
         )
+
+        # -----------------------------
+        # EMA 33
+        # -----------------------------
 
         ema33 = calculate_ema(
             closes,
             33
         )
 
-        # Previous closed candle
         previous_ema9 = float(
             ema9.iloc[-2]
         )
@@ -443,7 +433,6 @@ def get_ema_bullish_cross(
             ema33.iloc[-2]
         )
 
-        # Latest closed candle
         current_ema9 = float(
             ema9.iloc[-1]
         )
@@ -452,13 +441,17 @@ def get_ema_bullish_cross(
             ema33.iloc[-1]
         )
 
-        # Fresh bullish crossover:
+        # =================================================
+        # FRESH BULLISH CROSS
+        # =================================================
         #
-        # Previous:
-        # EMA9 <= EMA33
+        # Previous candle:
+        # EMA 9 <= EMA 33
         #
-        # Current:
-        # EMA9 > EMA33
+        # Latest closed candle:
+        # EMA 9 > EMA 33
+        #
+        # =================================================
 
         bullish_cross = (
             previous_ema9 <= previous_ema33
@@ -466,17 +459,24 @@ def get_ema_bullish_cross(
             current_ema9 > current_ema33
         )
 
-        if not bullish_cross:
-            return None
-
         current_price = float(
             closes.iloc[-1]
         )
 
         return {
+            "symbol": symbol,
+            "interval": interval,
+
             "price": current_price,
+
+            "rsi": current_rsi,
+            "previous_rsi": previous_rsi,
+            "direction": direction,
+
             "ema9": current_ema9,
-            "ema33": current_ema33
+            "ema33": current_ema33,
+
+            "bullish_cross": bullish_cross
         }
 
     except Exception:
@@ -485,7 +485,7 @@ def get_ema_bullish_cross(
 
 
 # =========================================================
-# TRADINGVIEW
+# TRADINGVIEW URL
 # =========================================================
 
 def get_tradingview_interval(
@@ -514,35 +514,32 @@ def get_tradingview_url(
         interval
     )
 
-    encoded_symbol = quote(
-        f"BINANCE:{symbol}",
-        safe=""
-    )
+    # Colon is intentionally left unencoded
+    # so the coin name can be displayed
+    # by Streamlit LinkColumn.
 
     return (
         "https://www.tradingview.com/chart/"
-        f"?symbol={encoded_symbol}"
+        f"?symbol=BINANCE:{symbol}"
         f"&interval={tv_interval}"
     )
 
 
 # =========================================================
-# PRIMARY RSI SCAN
+# SCAN SYMBOLS FOR A TIMEFRAME
 # =========================================================
 
-def scan_primary(
-    symbols
+def scan_timeframe(
+    symbols,
+    interval,
+    progress_info=None
 ):
 
     results = []
 
-    progress = st.progress(0)
-
-    status = st.empty()
+    total = len(symbols)
 
     completed = 0
-
-    total = len(symbols)
 
     with ThreadPoolExecutor(
         max_workers=20
@@ -551,9 +548,9 @@ def scan_primary(
         futures = {
 
             executor.submit(
-                get_coin_rsi,
+                analyze_coin,
                 symbol,
-                timeframe
+                interval
             ): symbol
 
             for symbol in symbols
@@ -563,75 +560,14 @@ def scan_primary(
             futures
         ):
 
-            symbol = futures[
-                future
-            ]
-
             try:
 
                 data = future.result()
 
                 if data is not None:
 
-                    if not is_in_range(
-                        data["current"],
-                        rsi_range
-                    ):
-
-                        completed += 1
-
-                        progress.progress(
-                            completed / total
-                        )
-
-                        continue
-
-                    if (
-                        direction_filter
-                        == "Rising"
-                        and
-                        data["direction"]
-                        != "🟢 Rising"
-                    ):
-
-                        completed += 1
-
-                        progress.progress(
-                            completed / total
-                        )
-
-                        continue
-
-                    if (
-                        direction_filter
-                        == "Falling"
-                        and
-                        data["direction"]
-                        != "🔴 Falling"
-                    ):
-
-                        completed += 1
-
-                        progress.progress(
-                            completed / total
-                        )
-
-                        continue
-
                     results.append(
-                        {
-                            "Coin":
-                                symbol,
-
-                            "Primary RSI":
-                                data["current"],
-
-                            "Previous RSI":
-                                data["previous"],
-
-                            "Direction":
-                                data["direction"]
-                        }
+                        data
                     )
 
             except Exception:
@@ -640,290 +576,259 @@ def scan_primary(
 
             completed += 1
 
-            progress.progress(
-                completed / total
-            )
+            if progress_info is not None:
 
-            status.write(
-                f"Primary scan: "
-                f"{completed}/{total}"
-            )
-
-    progress.empty()
-
-    status.empty()
+                progress_info(
+                    completed,
+                    total,
+                    interval
+                )
 
     return results
 
 
 # =========================================================
-# CONFIRMATION RSI SCAN
+# SCAN ALL REQUIRED TIMEFRAMES
 # =========================================================
 
-def scan_confirmation(
-    primary_results
+def scan_market_data(
+    symbols,
+    required_timeframes
 ):
 
-    if not primary_results:
-        return []
+    all_data = {}
+
+    progress = st.progress(0)
+
+    status = st.empty()
+
+    total_work = (
+        len(required_timeframes)
+        *
+        len(symbols)
+    )
+
+    completed_total = 0
+
+    for interval in required_timeframes:
+
+        interval_results = []
+
+        with ThreadPoolExecutor(
+            max_workers=20
+        ) as executor:
+
+            futures = {
+
+                executor.submit(
+                    analyze_coin,
+                    symbol,
+                    interval
+                ): symbol
+
+                for symbol in symbols
+            }
+
+            for future in as_completed(
+                futures
+            ):
+
+                try:
+
+                    data = future.result()
+
+                    if data is not None:
+
+                        interval_results.append(
+                            data
+                        )
+
+                except Exception:
+
+                    pass
+
+                completed_total += 1
+
+                progress.progress(
+                    completed_total
+                    / total_work
+                )
+
+                status.write(
+                    f"Scanning {interval}: "
+                    f"{completed_total}/"
+                    f"{total_work}"
+                )
+
+        all_data[interval] = (
+            interval_results
+        )
+
+    progress.empty()
+
+    status.empty()
+
+    return all_data
+
+
+# =========================================================
+# RSI RESULTS
+# =========================================================
+
+def build_rsi_results(
+    market_data
+):
+
+    primary_data = market_data.get(
+        primary_timeframe,
+        []
+    )
+
+    confirmation_data = market_data.get(
+        confirmation_timeframe,
+        []
+    )
+
+    confirmation_map = {
+        item["symbol"]: item
+        for item in confirmation_data
+    }
 
     results = []
 
-    progress = st.progress(0)
+    for item in primary_data:
 
-    status = st.empty()
+        symbol = item["symbol"]
 
-    completed = 0
+        current_rsi = item["rsi"]
 
-    total = len(primary_results)
+        if current_rsi is None:
+            continue
 
-    with ThreadPoolExecutor(
-        max_workers=20
-    ) as executor:
-
-        futures = {
-
-            executor.submit(
-                get_coin_rsi,
-                item["Coin"],
-                confirmation_timeframe
-            ): item
-
-            for item in primary_results
-        }
-
-        for future in as_completed(
-            futures
+        # Primary RSI filter
+        if not is_in_range(
+            current_rsi,
+            primary_rsi_range
         ):
+            continue
 
-            item = futures[
-                future
-            ]
+        # Direction filter
+        if (
+            direction_filter == "Rising"
+            and item["direction"]
+            != "🟢 Rising"
+        ):
+            continue
 
-            try:
+        if (
+            direction_filter == "Falling"
+            and item["direction"]
+            != "🔴 Falling"
+        ):
+            continue
 
-                data = future.result()
+        confirmation = (
+            confirmation_map.get(symbol)
+        )
 
-                if data is not None:
+        if confirmation is None:
+            continue
 
-                    if not is_in_range(
-                        data["current"],
-                        confirmation_rsi_range
-                    ):
+        confirmation_rsi = (
+            confirmation["rsi"]
+        )
 
-                        completed += 1
+        if confirmation_rsi is None:
+            continue
 
-                        progress.progress(
-                            completed / total
-                        )
+        if not is_in_range(
+            confirmation_rsi,
+            confirmation_rsi_range
+        ):
+            continue
 
-                        continue
+        results.append(
+            {
+                "Coin": symbol,
 
-                    symbol = item[
-                        "Coin"
-                    ]
+                "Primary RSI":
+                    item["rsi"],
 
-                    results.append(
-                        {
-                            "Coin":
-                                symbol,
+                "Previous RSI":
+                    item["previous_rsi"],
 
-                            "Primary RSI":
-                                item[
-                                    "Primary RSI"
-                                ],
+                "Direction":
+                    item["direction"],
 
-                            "Previous RSI":
-                                item[
-                                    "Previous RSI"
-                                ],
+                "Confirmation RSI":
+                    confirmation_rsi,
 
-                            "Direction":
-                                item[
-                                    "Direction"
-                                ],
-
-                            "Confirmation RSI":
-                                data[
-                                    "current"
-                                ],
-
-                            "TradingView":
-                                get_tradingview_url(
-                                    symbol,
-                                    timeframe
-                                )
-                        }
+                "TradingView":
+                    get_tradingview_url(
+                        symbol,
+                        primary_timeframe
                     )
-
-            except Exception:
-
-                pass
-
-            completed += 1
-
-            progress.progress(
-                completed / total
-            )
-
-            status.write(
-                f"Confirmation scan: "
-                f"{completed}/{total}"
-            )
-
-    progress.empty()
-
-    status.empty()
+            }
+        )
 
     return results
 
 
 # =========================================================
-# EMA MULTI-TIMEFRAME SCAN
+# EMA BULLISH CROSS RESULTS
 # =========================================================
 
-def scan_ema_bullish(
-    symbols,
-    selected_timeframes
+def build_ema_results(
+    market_data
 ):
 
-    all_results = []
+    results = []
 
-    if not selected_timeframes:
+    for interval in ema_timeframes:
 
-        return all_results
+        timeframe_data = market_data.get(
+            interval,
+            []
+        )
 
-    total_tasks = (
-        len(symbols)
-        *
-        len(selected_timeframes)
-    )
+        for item in timeframe_data:
 
-    progress = st.progress(0)
+            # ONLY FRESH BULLISH CROSS
+            if not item["bullish_cross"]:
+                continue
 
-    status = st.empty()
+            results.append(
+                {
+                    "Coin":
+                        item["symbol"],
 
-    completed = 0
+                    "Timeframe":
+                        interval,
 
-    with ThreadPoolExecutor(
-        max_workers=20
-    ) as executor:
+                    "Signal":
+                        "🟢 Bullish EMA Cross",
 
-        futures = {}
+                    "Price":
+                        item["price"],
 
-        for interval in selected_timeframes:
+                    "EMA 9":
+                        item["ema9"],
 
-            for symbol in symbols:
+                    "EMA 33":
+                        item["ema33"],
 
-                future = executor.submit(
-                    get_ema_bullish_cross,
-                    symbol,
-                    interval
-                )
+                    "RSI":
+                        item["rsi"],
 
-                futures[
-                    future
-                ] = (
-                    symbol,
-                    interval
-                )
-
-        for future in as_completed(
-            futures
-        ):
-
-            symbol, interval = futures[
-                future
-            ]
-
-            try:
-
-                data = future.result()
-
-                if data is not None:
-
-                    # Get RSI for the same timeframe
-                    rsi_data = get_coin_rsi(
-                        symbol,
-                        interval
-                    )
-
-                    if rsi_data is not None:
-
-                        rsi_value = (
-                            rsi_data["current"]
+                    "TradingView":
+                        get_tradingview_url(
+                            item["symbol"],
+                            interval
                         )
-
-                    else:
-
-                        rsi_value = None
-
-                    all_results.append(
-                        {
-                            "Coin":
-                                symbol,
-
-                            "Timeframe":
-                                interval,
-
-                            "Signal":
-                                "🟢 Bullish EMA Cross",
-
-                            "Price":
-                                round(
-                                    data[
-                                        "price"
-                                    ],
-                                    8
-                                ),
-
-                            "EMA 9":
-                                round(
-                                    data[
-                                        "ema9"
-                                    ],
-                                    8
-                                ),
-
-                            "EMA 33":
-                                round(
-                                    data[
-                                        "ema33"
-                                    ],
-                                    8
-                                ),
-
-                            "RSI":
-                                rsi_value,
-
-                            "TradingView":
-                                get_tradingview_url(
-                                    symbol,
-                                    interval
-                                )
-                        }
-                    )
-
-            except Exception:
-
-                pass
-
-            completed += 1
-
-            progress.progress(
-                completed / total_tasks
+                }
             )
 
-            status.write(
-                f"EMA scan: "
-                f"{completed}/{total_tasks}"
-            )
-
-    progress.empty()
-
-    status.empty()
-
-    return all_results
+    return results
 
 
 # =========================================================
@@ -944,8 +849,8 @@ def show_rsi_results(
 
     if df.empty:
 
-        st.warning(
-            "No RSI coins found."
+        st.info(
+            "No coins matched the selected RSI filters."
         )
 
         return
@@ -955,38 +860,151 @@ def show_rsi_results(
         ascending=False
     )
 
-    # Save original coin names
-    coin_names = df["Coin"].copy()
-
-    # Convert to TradingView URLs
-    df["Coin"] = [
-        get_tradingview_url(
-            symbol,
-            timeframe
-        )
-        for symbol in coin_names
-    ]
-
     st.success(
-        f"RSI scan completed! "
-        f"Found {len(df)} coins."
+        f"RSI scan completed — "
+        f"{len(df)} coins found."
     )
 
     st.dataframe(
-
         df,
-
         use_container_width=True,
-
         hide_index=True,
-
         column_config={
 
             "Coin":
                 st.column_config.LinkColumn(
                     "Coin",
                     display_text=(
-                        r".*symbol=BINANCE%3A(.*?)&interval=.*"
+                        r".*symbol=BINANCE:(.*?)&interval=.*"
                     ),
                     pinned=True
                 ),
+
+            "Primary RSI":
+                st.column_config.NumberColumn(
+                    f"{primary_timeframe} RSI",
+                    format="%.2f"
+                ),
+
+            "Previous RSI":
+                st.column_config.NumberColumn(
+                    "Previous RSI",
+                    format="%.2f"
+                ),
+
+            "Direction":
+                st.column_config.TextColumn(
+                    "RSI Direction"
+                ),
+
+            "Confirmation RSI":
+                st.column_config.NumberColumn(
+                    f"{confirmation_timeframe} RSI",
+                    format="%.2f"
+                ),
+
+            "TradingView":
+                st.column_config.LinkColumn(
+                    "TradingView",
+                    display_text="Open Chart 🔗"
+                )
+        }
+    )
+
+
+# =========================================================
+# SHOW EMA RESULTS
+# =========================================================
+
+def show_ema_results(
+    results
+):
+
+    st.subheader(
+        "🟢 EMA 9 / EMA 33 Bullish Cross Alerts"
+    )
+
+    df = pd.DataFrame(
+        results
+    )
+
+    if df.empty:
+
+        st.info(
+            "No fresh bullish EMA 9/33 cross "
+            "found in the selected timeframes."
+        )
+
+        return
+
+    df = df.sort_values(
+        [
+            "Timeframe",
+            "Coin"
+        ]
+    )
+
+    st.success(
+        f"Fresh bullish cross found: "
+        f"{len(df)}"
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+
+            "Coin":
+                st.column_config.LinkColumn(
+                    "Coin",
+                    help=(
+                        "Click the coin name "
+                        "to open TradingView."
+                    ),
+                    display_text=(
+                        r".*symbol=BINANCE:(.*?)&interval=.*"
+                    ),
+                    pinned=True
+                ),
+
+            "Timeframe":
+                st.column_config.TextColumn(
+                    "Timeframe"
+                ),
+
+            "Signal":
+                st.column_config.TextColumn(
+                    "Signal"
+                ),
+
+            "Price":
+                st.column_config.NumberColumn(
+                    "Current Price",
+                    format="%.8f"
+                ),
+
+            "EMA 9":
+                st.column_config.NumberColumn(
+                    "EMA 9",
+                    format="%.8f"
+                ),
+
+            "EMA 33":
+                st.column_config.NumberColumn(
+                    "EMA 33",
+                    format="%.8f"
+                ),
+
+            "RSI":
+                st.column_config.NumberColumn(
+                    "RSI",
+                    format="%.2f"
+                ),
+
+            "TradingView":
+                st.column_config.LinkColumn(
+                    "TradingView",
+                    display_text="Open Chart 🔗"
+                )
+        }
