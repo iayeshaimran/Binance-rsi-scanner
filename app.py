@@ -226,30 +226,6 @@ def render_heatmap(rows,tf):
         ("🚀 60+ Gainers",[x for x in rows if x["rsi"]>=60],"hot"),
     ]
 
-    labels=["All Zones","10–20 Extreme","20–30 Oversold","30–40 Hidden Bull & ICT",
-            "40–50 Neutral","50–60 V1 Zone","60+ Gainers"]
-    keys=["all","extreme","oversold","hidden","neutral","v1","gainers"]
-    colors=["","redp","amberp","bluep","","greenp","greenp"]
-
-    if "heat_zone" not in st.session_state:
-        st.session_state.heat_zone="all"
-
-    st.markdown('<div class="zone-filter"><span class="zone-label">RSI ZONES</span>',unsafe_allow_html=True)
-    cols=st.columns(7)
-    for i,(label,key) in enumerate(zip(labels,keys)):
-        with cols[i]:
-            if st.button(label,use_container_width=True,key=f"heat_zone_{key}"):
-                st.session_state.heat_zone=key
-    st.markdown('</div>',unsafe_allow_html=True)
-
-    idx=keys.index(st.session_state.heat_zone)
-    if st.session_state.heat_zone=="all":
-        title="📊 All RSI Zones"
-        items=rows
-        cls=""
-    else:
-        title,items,cls=groups[idx-1]
-
     # Small live highlight: strongest rising RSI in the 52–55 band.
     rising=[x for x in rows if 52<=x["rsi"]<55 and x.get("change",0)>0]
     if rising:
@@ -260,25 +236,32 @@ def render_heatmap(rows,tf):
             unsafe_allow_html=True
         )
 
-    st.markdown(
-        f'<div class="zone-head">{title} <span class="zone-count">{len(items)} coins</span></div>',
-        unsafe_allow_html=True
-    )
-
-    if not items:
-        st.markdown('<div class="small-note">No coins in this zone right now.</div>',unsafe_allow_html=True)
-        return
-
-    html='<div class="heat-grid">'
-    for z in items:
-        html+=(
-            f'<a class="coin {cls}" href="{tv(z["symbol"],tf)}" '
-            f'target="_blank" rel="noopener noreferrer">'
-            f'<b>{z["symbol"].replace("USDT","")}</b><br>'
-            f'<small>RSI {z["rsi"]:.1f}</small><br>'
-            f'<span class="chg">{z["change"]:+.1f}%</span></a>'
+    # Show every RSI zone as its own section, like a professional market heatmap.
+    for title,items,cls in groups:
+        items=sorted(items,key=lambda x:x["rsi"],reverse=True)
+        st.markdown(
+            f'<div class="zone-head">{title} '
+            f'<span class="zone-count">{len(items)} coins</span></div>',
+            unsafe_allow_html=True
         )
-    st.markdown(html+'</div>',unsafe_allow_html=True)
+
+        if not items:
+            st.markdown(
+                '<div class="small-note">No coins in this zone right now.</div>',
+                unsafe_allow_html=True
+            )
+            continue
+
+        html='<div class="heat-grid">'
+        for z in items:
+            html+=(
+                f'<a class="coin {cls}" href="{tv(z["symbol"],tf)}" '
+                f'target="_blank" rel="noopener noreferrer">'
+                f'<b>{z["symbol"].replace("USDT","")}</b><br>'
+                f'<small>RSI {z["rsi"]:.1f}</small><br>'
+                f'<span class="chg">{z["change"]:+.1f}%</span></a>'
+            )
+        st.markdown(html+'</div>',unsafe_allow_html=True)
 
 
 @st.fragment(run_every=5)
@@ -477,6 +460,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
