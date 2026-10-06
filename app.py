@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import time
+import math
 
 st.set_page_config(page_title="COCO Nexus", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
 
@@ -104,26 +105,122 @@ def ema_signal(df):
     fresh=e9.iloc[-2]<=e33.iloc[-2] and e9.iloc[-1]>e33.iloc[-1]
     return fresh,float(e9.iloc[-1]),float(e33.iloc[-1]),float(e200.iloc[-1])
 
-def heikin(df):
-    x=df.iloc[:-1]
+def heikin(df, include_live=False):
+    # Binance returns the currently forming candle as the last row.
+    # By default we use closed candles only. Early mode can inspect the live candle.
+    x=df if include_live else df.iloc[:-1]
+    if len(x)<3:return None
     hc=(x.o+x.h+x.l+x.c)/4
     ho=np.zeros(len(x));ho[0]=(x.o.iloc[0]+x.c.iloc[0])/2
     for i in range(1,len(x)):ho[i]=(ho[i-1]+hc.iloc[i-1])/2
-    hh=np.maximum.reduce([x.h.to_numpy(),ho,hc.to_numpy()]); hl=np.minimum.reduce([x.l.to_numpy(),ho,hc.to_numpy()])
+    hh=np.maximum.reduce([x.h.to_numpy(),ho,hc.to_numpy()])
+    hl=np.minimum.reduce([x.l.to_numpy(),ho,hc.to_numpy()])
     return ho,hc,hh,hl
 
-def ha_signal(df,wick=.25):
+def _ha_pair_signal(ho,hc,hh,hl,wick=.25):
     try:
-        ho,hc,hh,hl=heikin(df);a,b=-2,-1
-        if not(hc[a]>ho[a] and hc[b]>ho[b] and hc[b]>hc[a] and hh[b]>hh[a]):return False
-        ba=abs(hc[a]-ho[a]);bb=abs(hc[b]-ho[b])
-        if ba==0 or bb==0:return False
-        return (min(ho[a],hc[a])-hl[a])/ba<=wick and (min(ho[b],hc[b])-hl[b])/bb<=wick
+        if len(hc)<2:return False
+        a,b=-2,-1
+        if not(hc[a]>ho[a] and hc[b]>ho[b] and hc[b]>hc[a] and hh[b]>=hh[a]):return False
+        ba=max(abs(hc[a]-ho[a]),1e-12); bb=max(abs(hc[b]-ho[b]),1e-12)
+        lower_a=(min(ho[a],hc[a])-hl[a])/ba
+        lower_b=(min(ho[b],hc[b])-hl[b])/bb
+        return lower_a<=wick and lower_b<=wick
     except Exception:return False
+
+def ha_signal(df,wick=.25,include_live=False):
+    z=heikin(df,include_live=include_live)
+    return False if z is None else _ha_pair_signal(*z,wick)
+
+def ha_early_signal(df,wick=.25):
+    # Early trigger: one closed bullish HA candle + current forming HA candle bullish.
+    try:
+        z=heikin(df,include_live=True)
+        if z is None:return False
+        ho,hc,hh,hl=z
+        if len(hc)<2:return False
+        a,b=-2,-1
+        if not(hc[a]>ho[a] and hc[b]>ho[b]):return False
+        if hc[b]<=hc[a] or hh[b]<hh[a]:return False
+        ba=max(abs(hc[a]-ho[a]),1e-12); bb=max(abs(hc[b]-ho[b]),1e-12)
+        return ((min(ho[a],hc[a])-hl[a])/ba<=wick and
+                (min(ho[b],hc[b])-hl[b])/bb<=wick)
+    except Exception:return False
+
+def price_action(df):
+    # Closed-candle market structure: HH/HL, BOS and bullish engulfing.
+    x=df.iloc[:-1]
+    if len(x)<8:
+        return {"hh":False,"hl":False,"bos":False,"engulf":False,"sweep":False}
+    h=x["h"].to_numpy(); l=x["l"].to_numpy(); o=x["o"].to_numpy(); c=x["c"].to_numpy()
+    ph1=max(h[-7:-4]); ph2=max(h[-4:-1])
+    pl1=min(l[-7:-4]); pl2=min(l[-4:-1])
+    hh=ph2>ph1
+    hl=pl2>pl1
+    bos=c[-1]>ph1
+    engulf=(c[-1]>o[-1] and c[-2]<o[-2] and c[-1]>=o[-2] and o[-1]<=c[-2])
+    # Liquidity sweep: recent low taken, but candle closed back above that low.
+    ref_low=min(l[-6:-2])
+    sweep=l[-2]<ref_low and c[-2]>ref_low
+    return {"hh":hh,"hl":hl,"bos":bos,"engulf":engulf,"sweep":sweep}
+
+def early_entry_score(df,wick=.25):
+    x=df.iloc[:-1]
+    if len(x)<35:return 0,[]
+    score=0;checks=[]
+    e9,e33,e200=ema_vals(df)
+    close=float(x["c"].iloc[-1])
+    if close>e9.iloc[-1]:
+        score+=10;checks.append(("Price > EMA9",True))
+    else: checks.append(("Price > EMA9",False))
+    if e9.iloc[-1]>e33.iloc[-1]:
+        score+=10;checks.append(("EMA9 > EMA33",True))
+    else: checks.append(("EMA9 > EMA33",False))
+    rv=rsi(df); rp=rsi_prev(df)
+    if rv>rp and 45<=rv<=68:
+        score+=15;checks.append(("RSI rising",True))
+    else: checks.append(("RSI rising",False))
+    vol=float(x["v"].iloc[-1]); avg=float(x["v"].iloc[-22:-1].mean())
+    vr=vol/avg if avg else 1
+    if vr>=1.25:
+        score+=15;checks.append(("Volume",True))
+    else: checks.append(("Volume",False))
+    ha=ha_early_signal(df,wick)
+    if ha:
+        score+=20;checks.append(("HA early",True))
+    else: checks.append(("HA early",False))
+    pa=price_action(df)
+    for key,label,pts in [("bos","BOS",15),("engulf","Bullish Engulfing",10),("sweep","Liquidity Sweep",10),("hh","HH",5),("hl","HL",5)]:
+        if pa[key]:
+            score+=pts;checks.append((label,True))
+    return score,checks
 
 def safe_change(t):
     try:return float(t.get("priceChangePercent",0))
     except:return 0.0
+
+def scan_early(ss,tf,minimum,wick,tp1_pct=1.0,tp2_pct=2.0,sl_pct=1.0):
+    out=[]
+    def one(s):
+        d=klines(s,tf)
+        if d is None:return None
+        score,checks=early_entry_score(d,wick)
+        if score<minimum:return None
+        entry=float(d["c"].iloc[-1])
+        label="EARLY BUY" if score>=60 else "EARLY WATCH"
+        return {
+            "Coin":s,"Score":score,"Signal":label,"Entry":entry,
+            "TP1":entry*(1+tp1_pct/100),"TP2":entry*(1+tp2_pct/100),"SL":entry*(1-sl_pct/100),
+            "TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,
+            "RSI":round(rsi(d),1),"TradingView":tv(s,tf),"Checks":checks
+        }
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        for f in as_completed([ex.submit(one,s) for s in ss]):
+            try:
+                z=f.result()
+                if z:out.append(z)
+            except Exception:pass
+    return sorted(out,key=lambda x:x["Score"],reverse=True)
 
 def scan_confluence(ss,tf,minimum,settings,wick):
     out=[]
@@ -203,12 +300,18 @@ def scan_ema(ss,tf):
 def scan_ha(ss,tfs,wick,minimum):
     out=[]
     def one(s):
-        good=[]
+        good=[]; early=[]
         for tf in tfs:
             d=klines(s,tf)
-            if d is not None and ha_signal(d,wick):good.append(tf)
-        if len(good)<minimum:return None
-        return {"Coin":s,"Bullish Timeframes":", ".join(good),"Alignment":f"{len(good)}/{len(tfs)}","TradingView":tv(s,good[0])}
+            if d is not None:
+                if ha_signal(d,wick):good.append(tf)
+                if ha_early_signal(d,wick):early.append(tf)
+        if len(good)<minimum and len(early)<minimum:return None
+        show=good if good else early
+        return {"Coin":s,"Closed HA Timeframes":", ".join(good),"Early HA Timeframes":", ".join(early),
+                "Alignment":f"{len(good)}/{len(tfs)} closed • {len(early)}/{len(tfs)} early",
+                "Signal":"CONFIRMED" if len(good)>=minimum else "EARLY",
+                "TradingView":tv(s,show[0])}
     with ThreadPoolExecutor(max_workers=16) as ex:
         for f in as_completed([ex.submit(one,s) for s in ss]):
             try:
@@ -346,18 +449,19 @@ if "r" not in st.session_state:st.session_state.r=[]
 if "e" not in st.session_state:st.session_state.e=[]
 if "h" not in st.session_state:st.session_state.h=[]
 if "c" not in st.session_state:st.session_state.c=[]
+if "early" not in st.session_state:st.session_state.early=[]
 
 # ----------------------------- sidebar -----------------------------
 with st.sidebar:
     st.markdown("## 🟢 COCO Nexus")
     st.caption("Professional Binance signal dashboard")
     st.markdown("### Navigation")
-    section=st.radio("",["Dashboard","RSI Scanner","Confluence Scanner","EMA 9/33","Heikin Ashi"],label_visibility="collapsed")
+    section=st.radio("",["Dashboard","Early Entry","RSI Scanner","Confluence Scanner","EMA 9/33","Heikin Ashi"],label_visibility="collapsed")
     st.markdown("### Chart Settings")
     chart_tf=st.selectbox("TradingView timeframe",RSI_TFS,index=2)
     search=st.text_input("🔎 Find coin",placeholder="BTC, XRP, DOGE...")
     st.markdown("### Scanner Status")
-    st.markdown('<div class="side-row"><span>RSI Heatmap</span><span class="active">● LIVE</span></div><div class="side-row"><span>EMA Crossover</span><span class="idle">Ready</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">Ready</span></div><div class="side-row"><span>Confluence</span><span class="idle">Ready</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="side-row"><span>RSI Heatmap</span><span class="active">● LIVE</span></div><div class="side-row"><span>Early Entry</span><span class="active">LIVE</span></div><div class="side-row"><span>EMA Crossover</span><span class="idle">Ready</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">Ready</span></div><div class="side-row"><span>Confluence</span><span class="idle">Ready</span></div>',unsafe_allow_html=True)
     st.caption("⚡ Fast mode: scans the most active pairs first")
 
 # ----------------------------- live top clock -----------------------------
@@ -430,6 +534,40 @@ with left:
         else:st.caption("No confluence signals loaded yet.")
         st.markdown('</div>',unsafe_allow_html=True)
 
+    elif section=="Early Entry":
+        st.markdown('<div class="panel"><div class="panel-title">⚡ Early Entry Smart Scanner</div><div class="muted">Early HA + RSI + EMA + volume + price action. Designed to reduce late entries while keeping a separate confirmed signal.</div>',unsafe_allow_html=True)
+        e1,e2,e3=st.columns(3)
+        with e1:
+            etf=st.selectbox("Early Entry timeframe",["3m","5m","15m","1h"],index=1,key="early_tf")
+            emin=st.slider("Minimum early score",30,100,55,5,key="early_score")
+        with e2:
+            euni=st.selectbox("Scan universe",[40,60,100,150,200],index=1,key="early_uni")
+            ewick=st.slider("HA lower-wick tolerance",0.0,1.0,.20,.05,key="early_wick")
+        with e3:
+            eauto=st.toggle("⚡ Auto scan",value=True,key="early_auto")
+            e_refresh=st.selectbox("Refresh seconds",[5,10,15,30,60],index=1,key="early_refresh")
+        p1,p2,p3=st.columns(3)
+        with p1: e_tp1=st.number_input("Early TP1 %",0.1,20.0,1.0,0.1,key="early_tp1")
+        with p2: e_tp2=st.number_input("Early TP2 %",0.1,50.0,2.0,0.1,key="early_tp2")
+        with p3: e_sl=st.number_input("Early SL %",0.1,20.0,1.0,0.1,key="early_sl")
+        manual=st.button("⚡ SCAN EARLY ENTRY NOW",use_container_width=True,key="early_scan")
+        if "early_last" not in st.session_state: st.session_state.early_last=0.0
+        due=time.time()-st.session_state.early_last>=e_refresh
+        if manual or (eauto and due):
+            candidates=active_symbols(euni)
+            with st.spinner(f"Early scan: {len(candidates)} active pairs..."):
+                st.session_state.early=scan_early(candidates,etf,emin,ewick,e_tp1,e_tp2,e_sl)
+            st.session_state.early_last=time.time()
+        if st.session_state.get("early"):
+            for z in st.session_state.early[:15]:
+                checks=" • ".join([("✓ " if ok else "○ ")+name for name,ok in z["Checks"]])
+                levels=f'<span class="lvl entry">Entry {z["Entry"]:.8g}</span><span class="lvl tp">TP1 {z["TP1"]:.8g} (+{z["TP1 %"]:.1f}%)</span><span class="lvl tp">TP2 {z["TP2"]:.8g} (+{z["TP2 %"]:.1f}%)</span><span class="lvl sl">SL {z["SL"]:.8g} (-{z["SL %"]:.1f}%)</span>'
+                st.markdown(f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge buy">{z["Signal"]}</span></div><div class="score green">{z["Score"]}</div></div><div class="muted">RSI {z["RSI"]} • <a href="{z["TradingView"]}" target="_blank">TradingView ↗</a></div><div class="levels">{levels}</div><div class="checks">{checks}</div></div>',unsafe_allow_html=True)
+        else:
+            st.info("No early-entry setup currently meets the score.")
+        st.caption("Early mode intentionally uses the live forming candle for timing. Treat it as an early alert, not a guaranteed entry.")
+        st.markdown('</div>',unsafe_allow_html=True)
+
     elif section=="RSI Scanner":
         st.markdown('<div class="panel"><div class="panel-title">🔍 RSI Scanner</div>',unsafe_allow_html=True)
         x1,x2,x3=st.columns(3)
@@ -482,7 +620,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
     elif section=="Heikin Ashi":
-        st.markdown('<div class="panel"><div class="panel-title">🕯️ Heikin Ashi Bullish Scanner</div>',unsafe_allow_html=True)
+        st.markdown('<div class="panel"><div class="panel-title">🕯️ Heikin Ashi Bullish Scanner</div><div class="muted">Shows EARLY when the live candle is developing and CONFIRMED after two closed bullish HA candles.</div>',unsafe_allow_html=True)
         tfs=st.multiselect("HA timeframes",TIMEFRAMES,["3m","5m","15m","1h","4h"],key="ha_tfs")
         w=st.slider("Maximum lower wick / body",0.0,1.0,.25,.05,key="ha_wick")
         minimum=st.slider("Minimum bullish HA timeframes",1,5,3,key="ha_min");ha_universe=st.selectbox("Scan universe",[40,60,80,100],index=1,key="ha_universe")
@@ -494,6 +632,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
