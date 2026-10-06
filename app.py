@@ -11,10 +11,13 @@ st.markdown("""
 .hero,.card{background:#101824;border:1px solid #243247;border-radius:14px;padding:16px;margin-bottom:12px}
 .hero h1{margin:0}.muted{color:#8995a8}
 .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}
-.coin{padding:9px;border-radius:9px;text-align:center;background:#123728;border:1px solid #255d43}
+.coin{display:block;padding:9px;border-radius:9px;text-align:center;background:#123728;border:1px solid #255d43;color:#fff;text-decoration:none;cursor:pointer;transition:.15s}.coin:hover{transform:translateY(-2px);border-color:#35e88a;box-shadow:0 4px 16px rgba(53,232,138,.18)}
 .red{background:#39211d;border-color:#704139}.orange{background:#302b18;border-color:#6b5a27}
 @media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:500px){.grid{grid-template-columns:repeat(2,1fr)}}
+div[data-testid="stButton"] button{background:#162235!important;color:#ffffff!important;border:1px solid #35e88a!important;border-radius:10px!important;font-weight:700!important;min-height:44px!important}
+div[data-testid="stButton"] button:hover{background:#1d3b31!important;color:#ffffff!important;border-color:#55ffab!important}
+div[data-testid="stButton"] button p{color:#ffffff!important;font-weight:700!important}
 </style>
 """, unsafe_allow_html=True)
 
@@ -113,7 +116,7 @@ a.metric("USDT Pairs",len(ss));b.metric("API","LIVE");c.metric("RSI Signals",len
 
 st.subheader("📊 RSI Heatmap")
 ht=st.selectbox("Heatmap timeframe",["5m","15m","1h","4h"],index=1)
-if st.button("🔄 UPDATE RSI HEATMAP",use_container_width=True):
+if st.button("🔄 UPDATE RSI HEATMAP",use_container_width=True,key="update_heatmap_btn"):
     with st.spinner("Loading RSI heatmap..."):
         vals=[]
         with ThreadPoolExecutor(max_workers=8) as ex:
@@ -131,7 +134,7 @@ if heat:
         ("🟠 Neutral",[x for x in heat if 30<=x[1]<60],"orange"),
         ("🟢 Gainers Zone",[x for x in heat if x[1]>=60],"")]:
         st.markdown(f"**{title} — {len(items)} coins**",unsafe_allow_html=True)
-        html='<div class="grid">'+''.join(f'<div class="coin {cls}"><b>{s.replace("USDT","")}</b><br><small>RSI: {v:.1f}</small></div>' for s,v in items)+'</div>'
+        html='<div class="grid">'+''.join(f'<a class="coin {cls}" href="{tv(s,ht)}" target="_blank" rel="noopener noreferrer"><b>{s.replace("USDT","")}</b><br><small>RSI: {v:.1f}</small><br><small>Open Chart ↗</small></a>' for s,v in items)+'</div>'
         st.markdown(html,unsafe_allow_html=True)
 else:st.info("Update the heatmap to load coins.")
 
@@ -140,13 +143,13 @@ x1,x2,x3=st.columns(3)
 with x1:pt=st.selectbox("Primary timeframe",["5m","15m","1h","4h"],index=1);pr=st.selectbox("Primary RSI range",["All","40 - 50","50 - 55","55 - 60","60 - 70","70+"])
 with x2:ct=st.selectbox("Confirmation timeframe",["5m","15m","1h","4h"],index=2);cr=st.selectbox("Confirmation RSI range",["All","40 - 50","50 - 55","55 - 60","60 - 70","70+"])
 with x3:di=st.selectbox("RSI direction",["All","Rising","Falling"]);st.checkbox("Closed candles only",True)
-if st.button("🔍 SCAN RSI",use_container_width=True):
+if st.button("🔍 SCAN RSI",use_container_width=True,key="scan_rsi_btn"):
     with st.spinner(f"Scanning {len(ss)} coins..."):st.session_state["r"]=scan_rsi(ss,pt,ct,pr,cr,di)
 if st.session_state.get("r"):st.dataframe(pd.DataFrame(st.session_state["r"]),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
 
 st.subheader("📈 EMA 9 / 33 Scanner")
 et=st.selectbox("EMA timeframe",["5m","15m","1h","4h"],index=1)
-if st.button("🔍 SCAN EMA 9/33",use_container_width=True):
+if st.button("🔍 SCAN EMA 9/33",use_container_width=True,key="scan_ema_btn"):
     with st.spinner(f"Scanning {len(ss)} coins..."):st.session_state["e"]=scan_ema(ss,et)
 if st.session_state.get("e"):st.dataframe(pd.DataFrame(st.session_state["e"]),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
 
@@ -154,12 +157,13 @@ st.subheader("🕯️ Heikin Ashi Scanner")
 tfs=st.multiselect("HA timeframes",["3m","5m","15m","1h","4h"],["3m","5m","15m","1h","4h"])
 w=st.slider("Maximum lower wick / body",0.0,1.0,.25,.05)
 minimum=st.slider("Minimum bullish HA timeframes",1,5,3)
-if st.button("🔍 SCAN HEIKIN ASHI",use_container_width=True):
+if st.button("🔍 SCAN HEIKIN ASHI",use_container_width=True,key="scan_ha_btn"):
     with st.spinner(f"Scanning {len(ss)} coins..."):st.session_state["h"]=scan_ha(ss,tfs,w,minimum)
 if st.session_state.get("h"):st.dataframe(pd.DataFrame(st.session_state["h"]),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
 
 st.markdown("---")
 st.caption("COCO Pulse • Crypto Signal Scanner • Binance Public Spot API • Not financial advice")
+
 
 
 
