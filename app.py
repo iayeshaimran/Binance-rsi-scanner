@@ -226,16 +226,16 @@ def render_heatmap(rows,tf):
         ("🚀 60+ Gainers",[x for x in rows if x["rsi"]>=60],"hot"),
     ]
 
-    labels=["10–20 Extreme","20–30 Oversold","30–40 Hidden Bull & ICT",
+    labels=["All Zones","10–20 Extreme","20–30 Oversold","30–40 Hidden Bull & ICT",
             "40–50 Neutral","50–60 V1 Zone","60+ Gainers"]
-    keys=["extreme","oversold","hidden","neutral","v1","gainers"]
-    colors=["redp","amberp","bluep","","greenp","greenp"]
+    keys=["all","extreme","oversold","hidden","neutral","v1","gainers"]
+    colors=["","redp","amberp","bluep","","greenp","greenp"]
 
     if "heat_zone" not in st.session_state:
-        st.session_state.heat_zone="gainers"
+        st.session_state.heat_zone="all"
 
     st.markdown('<div class="zone-filter"><span class="zone-label">RSI ZONES</span>',unsafe_allow_html=True)
-    cols=st.columns(6)
+    cols=st.columns(7)
     for i,(label,key) in enumerate(zip(labels,keys)):
         with cols[i]:
             if st.button(label,use_container_width=True,key=f"heat_zone_{key}"):
@@ -243,7 +243,12 @@ def render_heatmap(rows,tf):
     st.markdown('</div>',unsafe_allow_html=True)
 
     idx=keys.index(st.session_state.heat_zone)
-    title,items,cls=groups[idx]
+    if st.session_state.heat_zone=="all":
+        title="📊 All RSI Zones"
+        items=rows
+        cls=""
+    else:
+        title,items,cls=groups[idx-1]
 
     # Small live highlight: strongest rising RSI in the 52–55 band.
     rising=[x for x in rows if 52<=x["rsi"]<55 and x.get("change",0)>0]
