@@ -1,7 +1,7 @@
-import streamlit as st
+rt numpy aimport streamlit as st
 import requests
 import pandas as pd
-import numpy as np
+impos np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -39,7 +39,7 @@ div[data-testid="stMetric"]{background:#0e1826;border:1px solid #213149;padding:
 @media(max-width:1200px){.heat-grid{grid-template-columns:repeat(4,minmax(110px,1fr))}}
 @media(max-width:850px){.heat-grid{grid-template-columns:repeat(3,minmax(95px,1fr))}.hero h1{font-size:24px}}
 @media(max-width:520px){.heat-grid{grid-template-columns:repeat(2,minmax(100px,1fr))}.block-container{padding-left:.65rem;padding-right:.65rem}}
-</style>
+.levels{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.lvl{padding:6px 9px;border-radius:8px;font-size:11px;font-weight:800;border:1px solid #2b3b52}.lvl.entry{color:#dbe6f5;background:rgba(120,140,165,.10)}.lvl.tp{color:var(--green);background:rgba(55,229,139,.08);border-color:rgba(55,229,139,.25)}.lvl.sl{color:var(--red);background:rgba(255,101,119,.08);border-color:rgba(255,101,119,.25)}.trade-levels{display:flex;gap:10px;align-items:center;margin-top:12px;margin-bottom:8px}</style>
 """, unsafe_allow_html=True)
 
 # ----------------------------- Data -----------------------------
@@ -150,7 +150,13 @@ def scan_confluence(ss,tf,minimum,settings,wick):
             ok=ha_signal(d,wick);score+=10 if ok else 0;checks.append(("Heikin Ashi",ok))
         if score<minimum:return None
         label="STRONG BUY" if score>=90 else "BUY" if score>=80 else "WATCH"
-        return {"Coin":s,"Score":score,"Signal":label,"RSI":round(rv,1),"Vol x":round(vr,2),"TradingView":tv(s,tf),"Checks":checks}
+        tp1_pct=float(settings.get("tp1_pct",1.0)); tp2_pct=float(settings.get("tp2_pct",2.0)); sl_pct=float(settings.get("sl_pct",1.0))
+        return {
+            "Coin":s,"Score":score,"Signal":label,"Entry":close,
+            "TP1":close*(1+tp1_pct/100),"TP2":close*(1+tp2_pct/100),"SL":close*(1-sl_pct/100),
+            "TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,
+            "RSI":round(rv,1),"Vol x":round(vr,2),"TradingView":tv(s,tf),"Checks":checks
+        }
     with ThreadPoolExecutor(max_workers=16) as ex:
         fs=[ex.submit(one,s) for s in ss]
         for f in as_completed(fs):
@@ -399,14 +405,28 @@ with left:
         with a2:ema200=st.checkbox("EMA 200 Trend",True,key="c_200");ema933=st.checkbox("EMA 9/33",True,key="c_933");rsim=st.checkbox("RSI Momentum",True,key="c_rsi")
         with a3:vol=st.checkbox("Volume Spike",True,key="c_vol");br=st.checkbox("Breakout",True,key="c_break");hac=st.checkbox("Heikin Ashi",True,key="c_ha")
         wick=st.slider("HA max lower-wick / body",0.0,1.0,.25,.05,key="c_wick")
+
+        st.markdown('<div class="trade-levels"><b>🎯 Spot Trade Levels</b><span class="muted">Optional — choose what appears on signal cards</span></div>',unsafe_allow_html=True)
+        t1,t2,t3,t4,t5=st.columns([1,1,1,1,1])
+        with t1:show_tp1=st.checkbox("Show TP1",True,key="show_tp1")
+        with t2:show_tp2=st.checkbox("Show TP2",True,key="show_tp2")
+        with t3:show_sl=st.checkbox("Show SL",True,key="show_sl")
+        with t4:tp1_pct=st.number_input("TP1 %",0.1,20.0,1.0,0.1,key="tp1_pct")
+        with t5:tp2_pct=st.number_input("TP2 %",0.1,50.0,2.0,0.1,key="tp2_pct")
+        sl_pct=st.number_input("SL %",0.1,20.0,1.0,0.1,key="sl_pct")
+
         if st.button("🚀 SCAN CONFLUENCE",use_container_width=True,key="conf_scan"):
-            settings={"ema200":ema200,"ema933":ema933,"rsi":rsim,"volume":vol,"breakout":br,"ha":hac}
+            settings={"ema200":ema200,"ema933":ema933,"rsi":rsim,"volume":vol,"breakout":br,"ha":hac,"tp1_pct":tp1_pct,"tp2_pct":tp2_pct,"sl_pct":sl_pct}
             candidates=active_symbols(conf_universe)
             with st.spinner(f"Fast scan: {len(candidates)} active pairs..."):st.session_state.c=scan_confluence(candidates,ctf,minscore,settings,wick)
         if st.session_state.c:
             for z in st.session_state.c[:12]:
                 badge="buy" if z["Score"]>=80 else "watch"; checks=" • ".join([("✓ " if ok else "○ ")+name for name,ok in z["Checks"]])
-                st.markdown(f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge {badge}">{z["Signal"]}</span></div><div class="score green">{z["Score"]}</div></div><div class="muted">RSI {z["RSI"]} • Volume {z["Vol x"]}x • <a href="{z["TradingView"]}" target="_blank">TradingView ↗</a></div><div class="checks">{checks}</div></div>',unsafe_allow_html=True)
+                levels=f'<span class="lvl entry">Entry {z["Entry"]:.8g}</span>'
+                if show_tp1: levels+=f'<span class="lvl tp">TP1 {z["TP1"]:.8g} (+{z["TP1 %"]:.1f}%)</span>'
+                if show_tp2: levels+=f'<span class="lvl tp">TP2 {z["TP2"]:.8g} (+{z["TP2 %"]:.1f}%)</span>'
+                if show_sl: levels+=f'<span class="lvl sl">SL {z["SL"]:.8g} (-{z["SL %"]:.1f}%)</span>'
+                st.markdown(f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge {badge}">{z["Signal"]}</span></div><div class="score green">{z["Score"]}</div></div><div class="muted">RSI {z["RSI"]} • Volume {z["Vol x"]}x • <a href="{z["TradingView"]}" target="_blank">TradingView ↗</a></div><div class="levels">{levels}</div><div class="checks">{checks}</div></div>',unsafe_allow_html=True)
         else:st.caption("No confluence signals loaded yet.")
         st.markdown('</div>',unsafe_allow_html=True)
 
@@ -427,13 +447,27 @@ with left:
     elif section=="Confluence Scanner":
         st.markdown('<div class="panel"><div class="panel-title">🎯 Full Confluence Scanner</div>',unsafe_allow_html=True)
         tf=st.selectbox("Timeframe",RSI_TFS,index=1,key="full_conf_tf");score=st.slider("Minimum score",40,100,75,5,key="full_score");full_universe=st.selectbox("Scan universe",[100,150,200,300],index=0,key="full_universe")
+        f1,f2,f3,f4,f5,f6=st.columns(6)
+        with f1:full_tp1=st.checkbox("Show TP1",True,key="full_tp1")
+        with f2:full_tp2=st.checkbox("Show TP2",True,key="full_tp2")
+        with f3:full_sl=st.checkbox("Show SL",True,key="full_sl")
+        with f4:full_tp1_pct=st.number_input("TP1 %",0.1,20.0,1.0,0.1,key="full_tp1_pct")
+        with f5:full_tp2_pct=st.number_input("TP2 %",0.1,50.0,2.0,0.1,key="full_tp2_pct")
+        with f6:full_sl_pct=st.number_input("SL %",0.1,20.0,1.0,0.1,key="full_sl_pct")
         q=st.button("🚀 RUN FULL CONFLUENCE SCAN",use_container_width=True,key="full_conf_scan")
         if q:
-            settings={"ema200":True,"ema933":True,"rsi":True,"volume":True,"breakout":True,"ha":True}
+            settings={"ema200":True,"ema933":True,"rsi":True,"volume":True,"breakout":True,"ha":True,"tp1_pct":full_tp1_pct,"tp2_pct":full_tp2_pct,"sl_pct":full_sl_pct}
             candidates=active_symbols(full_universe)
             with st.spinner(f"Scanning {len(candidates)} active pairs..."):st.session_state.c=scan_confluence(candidates,tf,score,settings,.25)
         if st.session_state.c:
-            st.dataframe(pd.DataFrame([{k:v for k,v in z.items() if k!="Checks"} for z in st.session_state.c]),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
+            full_rows=[]
+            for z in st.session_state.c:
+                row={k:v for k,v in z.items() if k not in ("Checks","TP1 %","TP2 %","SL %","TP1","TP2","SL")}
+                if full_tp1: row[f"TP1 (+{full_tp1_pct:.1f}%)"]=z["TP1"]
+                if full_tp2: row[f"TP2 (+{full_tp2_pct:.1f}%)"]=z["TP2"]
+                if full_sl: row[f"SL (-{full_sl_pct:.1f}%)"]=z["SL"]
+                full_rows.append(row)
+            st.dataframe(pd.DataFrame(full_rows),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
         else:st.info("Run the scanner to find multi-factor signals.")
         st.markdown('</div>',unsafe_allow_html=True)
 
@@ -460,6 +494,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
