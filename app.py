@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import time
 
 st.set_page_config(page_title="COCO Nexus", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
@@ -365,9 +366,19 @@ with st.sidebar:
     st.markdown('<div class="side-row"><span>RSI Heatmap</span><span class="active">● LIVE</span></div><div class="side-row"><span>EMA Crossover</span><span class="idle">Ready</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">Ready</span></div><div class="side-row"><span>Confluence</span><span class="idle">Ready</span></div>',unsafe_allow_html=True)
     st.caption("⚡ Fast mode: scans the most active pairs first")
 
+# ----------------------------- live top clock -----------------------------
+st.markdown("<style>.top-clock{display:flex;justify-content:flex-end;align-items:center;margin:0 4px 10px}.top-clock-box{background:rgba(13,21,33,.94);border:1px solid #263a54;border-radius:14px;padding:8px 15px;text-align:right;box-shadow:0 8px 22px rgba(0,0,0,.18)}.top-clock-time{font-size:20px;font-weight:900;line-height:1.05;color:#edf3fb}.top-clock-date{font-size:10px;color:#8190a5;margin-top:3px;letter-spacing:.5px}.top-clock-live{color:#49f08b;font-size:10px;font-weight:800;margin-right:5px}</style>",unsafe_allow_html=True)
+
+@st.fragment(run_every=1)
+def live_clock():
+    pkt=datetime.now(ZoneInfo("Asia/Karachi"))
+    st.markdown(f'<div class="top-clock"><div class="top-clock-box"><div class="top-clock-time"><span class="top-clock-live">● LIVE</span>{pkt.strftime("%I:%M:%S %p")}</div><div class="top-clock-date">🇵🇰 PKT • {pkt.strftime("%d %b %Y")}</div></div></div>',unsafe_allow_html=True)
+
+live_clock()
+
 # ----------------------------- header -----------------------------
-now=datetime.now().strftime("%H:%M:%S")
-st.markdown(f'<div class="hero"><div class="brand"><div class="brand-badge">🟢</div><div><h1>COCO Nexus</h1><div class="hero-sub">Crypto Signal Scanner • Binance USDT Spot • <span class="live"><span class="live-dot"></span>LIVE</span> • Updated {now}</div></div></div></div>',unsafe_allow_html=True)
+now=datetime.now(ZoneInfo("Asia/Karachi")).strftime("%I:%M:%S %p")
+st.markdown(f'<div class="hero"><div class="brand"><div class="brand-badge">🟢</div><div><h1>COCO Nexus</h1><div class="hero-sub">Crypto Signal Scanner • Binance USDT Spot • <span class="live"><span class="live-dot"></span>LIVE</span> • Updated {now} PKT</div></div></div></div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="margin:4px 2px 12px">⚡ Scans are optimized for speed by prioritizing high-volume active pairs. Increase the scan universe only when you need wider coverage.</div>',unsafe_allow_html=True)
 
@@ -461,6 +472,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
