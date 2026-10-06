@@ -1,7 +1,7 @@
-rt numpy aimport streamlit as st
+import streamlit as st
 import requests
 import pandas as pd
-impos np
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
