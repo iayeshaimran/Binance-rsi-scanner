@@ -26,7 +26,7 @@ section[data-testid="stSidebar"] .block-container{padding-top:1rem}
 .panel-title{font-size:18px;font-weight:800;margin-bottom:10px}.muted{color:var(--muted)}
 .stat{background:linear-gradient(180deg,#101b2b,#0c1420);border:1px solid #21334a;border-radius:15px;padding:13px 15px;min-height:88px}.stat-k{color:#7f91aa;font-size:12px;text-transform:uppercase;letter-spacing:.8px}.stat-v{font-size:25px;font-weight:900;margin-top:4px}.green{color:var(--green)}.redtxt{color:var(--red)}.amber{color:var(--amber)}.blue{color:var(--blue)}
 .mover{display:flex;justify-content:space-between;align-items:center;background:#0e1927;border:1px solid #203149;border-radius:11px;padding:9px 11px;margin:6px 0;text-decoration:none;color:#fff}.mover:hover{border-color:#49f08b;transform:translateX(2px)}
-.zone-head{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:900;margin:12px 2px 7px}.zone-count{font-size:12px;color:#8494aa;font-weight:600}.heat-grid{display:grid;grid-template-columns:repeat(8,minmax(80px,1fr));gap:7px}.coin{display:block;text-decoration:none;color:#fff;text-align:center;border-radius:11px;padding:9px 5px;background:linear-gradient(180deg,#172338,#111b2b);border:1px solid #30445f;transition:.14s;min-height:55px}.coin:hover{transform:translateY(-2px);border-color:#68c9ff;box-shadow:0 5px 18px rgba(74,183,255,.14)}.coin b{font-size:12px}.coin small{font-size:10px;color:#aab7c9}.coin .chg{font-size:10px;font-weight:800;margin-left:2px}.coin.hot{background:linear-gradient(180deg,#183c2b,#10251d);border-color:#2c704d}.coin.warn{background:linear-gradient(180deg,#3a3118,#211e13);border-color:#77612a}.coin.red{background:linear-gradient(180deg,#3a2027,#21151a);border-color:#78414c}.coin.bluezone{background:linear-gradient(180deg,#17334b,#13243a);border-color:#3b6c92}
+.zone-head{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:900;margin:12px 2px 7px}.zone-count{font-size:12px;color:#8494aa;font-weight:600}.heat-grid{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px}.coin{display:block;text-decoration:none;color:#fff;text-align:center;border-radius:11px;padding:9px 5px;background:linear-gradient(180deg,#172338,#111b2b);border:1px solid #30445f;transition:.14s;min-height:55px}.coin:hover{transform:translateY(-2px);border-color:#68c9ff;box-shadow:0 5px 18px rgba(74,183,255,.14)}.coin b{font-size:12px}.coin small{font-size:10px;color:#aab7c9}.coin .chg{font-size:10px;font-weight:800;margin-left:2px}.coin.hot{background:linear-gradient(180deg,#183c2b,#10251d);border-color:#2c704d}.coin.warn{background:linear-gradient(180deg,#3a3118,#211e13);border-color:#77612a}.coin.red{background:linear-gradient(180deg,#3a2027,#21151a);border-color:#78414c}.coin.bluezone{background:linear-gradient(180deg,#17334b,#13243a);border-color:#3b6c92}
 .pill-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px}.pill{border:1px solid #31435a;background:#101a29;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:800}.pill.greenp{border-color:#27704b;color:#6ff1a2}.pill.bluep{border-color:#356b95;color:#82caff}.pill.amberp{border-color:#7b6428;color:#ffd66c}.pill.redp{border-color:#7d3e4b;color:#ff8997}
 .signal{border:1px solid #243750;background:linear-gradient(145deg,#111d2d,#0b131f);border-radius:15px;padding:12px;margin:7px 0}.signal-top{display:flex;justify-content:space-between;align-items:center}.score{font-size:22px;font-weight:900}.badge{font-size:10px;font-weight:900;border-radius:999px;padding:5px 8px}.buy{background:#153e2a;color:#72f2a5;border:1px solid #2c8156}.watch{background:#3b3216;color:#ffd66a;border:1px solid #7b652a}.checks{color:#aebaca;font-size:11px;line-height:1.65;margin-top:6px}
 .side-card{background:#0e1826;border:1px solid #213149;border-radius:14px;padding:12px;margin-bottom:10px}.side-title{font-weight:900;font-size:15px;margin-bottom:8px}.side-row{display:flex;justify-content:space-between;padding:7px 8px;border-radius:9px;background:#101d2d;margin:5px 0;color:#c5cfdd;font-size:12px}.idle{color:#7e8da0}.active{color:var(--green);font-weight:800}.danger{color:var(--red);font-weight:800}
@@ -34,8 +34,8 @@ div[data-testid="stButton"] button{background:#142236!important;color:#f5f8fc!im
 div[data-testid="stMetric"]{background:#0e1826;border:1px solid #213149;padding:10px;border-radius:12px}
 [data-testid="stDataFrame"]{border:1px solid #213149;border-radius:12px}
 .small-note{font-size:11px;color:#718096}.section-space{height:3px}
-@media(max-width:1100px){.heat-grid{grid-template-columns:repeat(6,minmax(75px,1fr))}}
-@media(max-width:800px){.heat-grid{grid-template-columns:repeat(4,minmax(70px,1fr))}.hero h1{font-size:24px}}
+@media(max-width:1200px){.heat-grid{grid-template-columns:repeat(4,minmax(110px,1fr))}}
+@media(max-width:850px){.heat-grid{grid-template-columns:repeat(3,minmax(95px,1fr))}.hero h1{font-size:24px}}
 @media(max-width:520px){.heat-grid{grid-template-columns:repeat(2,minmax(100px,1fr))}.block-container{padding-left:.65rem;padding-right:.65rem}}
 </style>
 """, unsafe_allow_html=True)
@@ -58,6 +58,18 @@ def get_tickers():
     except Exception:
         return {}
 
+def active_symbols(limit=120):
+    # Prioritize liquid/active pairs instead of scanning hundreds of low-volume coins.
+    ranked=[]
+    for s in ss_global:
+        t=tickers_global.get(s,{})
+        try: q=float(t.get("quoteVolume",0))
+        except Exception: q=0
+        ranked.append((s,q))
+    ranked.sort(key=lambda x:x[1],reverse=True)
+    return [s for s,_ in ranked[:limit]]
+
+@st.cache_data(ttl=15, show_spinner=False)
 def klines(symbol, tf, limit=90):
     try:
         d=requests.get(BASE+"/api/v3/klines",params={"symbol":symbol,"interval":tf,"limit":limit},timeout=10).json()
@@ -137,7 +149,7 @@ def scan_confluence(ss,tf,minimum,settings,wick):
         if score<minimum:return None
         label="STRONG BUY" if score>=90 else "BUY" if score>=80 else "WATCH"
         return {"Coin":s,"Score":score,"Signal":label,"RSI":round(rv,1),"Vol x":round(vr,2),"TradingView":tv(s,tf),"Checks":checks}
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=16) as ex:
         fs=[ex.submit(one,s) for s in ss]
         for f in as_completed(fs):
             try:
@@ -156,7 +168,7 @@ def scan_rsi(ss,tf,confirm,rr,cr,direction):
         x=rsi(a);y=rsi(b);p=rsi_prev(a);dr="Rising" if x>p else "Falling" if x<p else "Flat"
         if not okrange(x,rr) or not okrange(y,cr) or (direction!="All" and dr!=direction):return None
         return {"Coin":s,"RSI":round(x,2),"Confirm RSI":round(y,2),"Direction":dr,"TradingView":tv(s,tf)}
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=16) as ex:
         for f in as_completed([ex.submit(one,s) for s in ss]):
             try:
                 z=f.result()
@@ -172,7 +184,7 @@ def scan_ema(ss,tf):
         ok,e9,e33,e200=ema_signal(d)
         if not ok:return None
         return {"Coin":s,"EMA 9":round(e9,8),"EMA 33":round(e33,8),"Signal":"Fresh Bullish Cross","TradingView":tv(s,tf)}
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=16) as ex:
         for f in as_completed([ex.submit(one,s) for s in ss]):
             try:
                 z=f.result()
@@ -189,7 +201,7 @@ def scan_ha(ss,tfs,wick,minimum):
             if d is not None and ha_signal(d,wick):good.append(tf)
         if len(good)<minimum:return None
         return {"Coin":s,"Bullish Timeframes":", ".join(good),"Alignment":f"{len(good)}/{len(tfs)}","TradingView":tv(s,good[0])}
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=16) as ex:
         for f in as_completed([ex.submit(one,s) for s in ss]):
             try:
                 z=f.result()
@@ -222,6 +234,7 @@ def render_heatmap(rows,tf):
 
 # ----------------------------- state -----------------------------
 ss=get_symbols(); tickers=get_tickers()
+ss_global=ss; tickers_global=tickers
 if "heat" not in st.session_state:st.session_state.heat=[]
 if "r" not in st.session_state:st.session_state.r=[]
 if "e" not in st.session_state:st.session_state.e=[]
@@ -239,11 +252,13 @@ with st.sidebar:
     search=st.text_input("🔎 Find coin",placeholder="BTC, XRP, DOGE...")
     st.markdown("### Scanner Status")
     st.markdown('<div class="side-row"><span>RSI Heatmap</span><span class="active">● LIVE</span></div><div class="side-row"><span>EMA Crossover</span><span class="idle">Ready</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">Ready</span></div><div class="side-row"><span>Confluence</span><span class="idle">Ready</span></div>',unsafe_allow_html=True)
-    st.caption("Data: Binance public Spot API")
+    st.caption("⚡ Fast mode: scans the most active pairs first")
 
 # ----------------------------- header -----------------------------
 now=datetime.now().strftime("%H:%M:%S")
 st.markdown(f'<div class="hero"><div class="brand"><div class="brand-badge">🟢</div><div><h1>COCO Pulse</h1><div class="hero-sub">Crypto Signal Scanner • Binance USDT Spot • <span class="live"><span class="live-dot"></span>LIVE</span> • Updated {now}</div></div></div></div>',unsafe_allow_html=True)
+
+st.markdown('<div class="small-note" style="margin:4px 2px 12px">⚡ Scans are optimized for speed by prioritizing high-volume active pairs. Increase the scan universe only when you need wider coverage.</div>',unsafe_allow_html=True)
 
 # ----------------------------- top stats -----------------------------
 total=len(ss); moves=[safe_change(tickers.get(s,{})) for s in ss]; up=sum(x>0 for x in moves); down=sum(x<0 for x in moves)
@@ -269,13 +284,13 @@ with left:
         st.markdown('<div class="panel"><div class="panel-title">📊 RSI Heatmap <span class="live">LIVE</span></div>',unsafe_allow_html=True)
         h1,h2,h3=st.columns([1.2,1,1])
         with h1:ht=st.selectbox("Heatmap timeframe",RSI_TFS,index=1,key="dash_heat_tf")
-        with h2:limit_heat=st.selectbox("Coins to scan",[80,120,200],index=1)
+        with h2:limit_heat=st.selectbox("Scan universe",[60,100,150,200],index=1)
         with h3:refresh_heat=st.button("🔄 UPDATE HEATMAP",use_container_width=True,key="dash_heat_btn")
         if refresh_heat:
             with st.spinner(f"Scanning RSI for {limit_heat} coins..."):
                 rows=[]
-                candidates=ss[:limit_heat]
-                with ThreadPoolExecutor(max_workers=8) as ex:
+                candidates=active_symbols(limit_heat)
+                with ThreadPoolExecutor(max_workers=16) as ex:
                     fs={ex.submit(klines,s,ht):s for s in candidates}
                     for f in as_completed(fs):
                         try:
@@ -289,13 +304,14 @@ with left:
 
         st.markdown('<div class="panel"><div class="panel-title">🎯 Confluence Signal Scanner</div><div class="muted">Combine EMA trend + EMA9/33 + RSI momentum + volume + breakout + Heikin Ashi into one score.</div>',unsafe_allow_html=True)
         a1,a2,a3=st.columns(3)
-        with a1:ctf=st.selectbox("Signal timeframe",RSI_TFS,index=1,key="conf_tf");minscore=st.slider("Minimum score",40,100,75,5,key="conf_score")
+        with a1:ctf=st.selectbox("Signal timeframe",RSI_TFS,index=1,key="conf_tf");minscore=st.slider("Minimum score",40,100,75,5,key="conf_score");conf_universe=st.selectbox("Scan universe",[60,100,150,200],index=1,key="conf_universe")
         with a2:ema200=st.checkbox("EMA 200 Trend",True,key="c_200");ema933=st.checkbox("EMA 9/33",True,key="c_933");rsim=st.checkbox("RSI Momentum",True,key="c_rsi")
         with a3:vol=st.checkbox("Volume Spike",True,key="c_vol");br=st.checkbox("Breakout",True,key="c_break");hac=st.checkbox("Heikin Ashi",True,key="c_ha")
         wick=st.slider("HA max lower-wick / body",0.0,1.0,.25,.05,key="c_wick")
         if st.button("🚀 SCAN CONFLUENCE",use_container_width=True,key="conf_scan"):
             settings={"ema200":ema200,"ema933":ema933,"rsi":rsim,"volume":vol,"breakout":br,"ha":hac}
-            with st.spinner(f"Scanning {len(ss)} Binance pairs..."):st.session_state.c=scan_confluence(ss,ctf,minscore,settings,wick)
+            candidates=active_symbols(conf_universe)
+            with st.spinner(f"Fast scan: {len(candidates)} active pairs..."):st.session_state.c=scan_confluence(candidates,ctf,minscore,settings,wick)
         if st.session_state.c:
             for z in st.session_state.c[:12]:
                 badge="buy" if z["Score"]>=80 else "watch"; checks=" • ".join([("✓ " if ok else "○ ")+name for name,ok in z["Checks"]])
@@ -308,9 +324,10 @@ with left:
         x1,x2,x3=st.columns(3)
         with x1:pt=st.selectbox("Primary timeframe",RSI_TFS,index=1);pr=st.selectbox("Primary RSI range",["All","40 - 50","50 - 55","55 - 60","60 - 70","70+"])
         with x2:ct=st.selectbox("Confirmation timeframe",RSI_TFS,index=2);cr=st.selectbox("Confirmation RSI range",["All","40 - 50","50 - 55","55 - 60","60 - 70","70+"])
-        with x3:di=st.selectbox("RSI direction",["All","Rising","Falling"]);st.checkbox("Closed candles only",True)
+        with x3:di=st.selectbox("RSI direction",["All","Rising","Falling"]);rsi_universe=st.selectbox("Scan universe",[60,100,150,200],index=1,key="rsi_universe");st.checkbox("Closed candles only",True)
         if st.button("🔍 SCAN RSI",use_container_width=True,key="rsi_page_scan"):
-            with st.spinner(f"Scanning {len(ss)} coins..."):st.session_state.r=scan_rsi(ss,pt,ct,pr,cr,di)
+            candidates=active_symbols(rsi_universe)
+            with st.spinner(f"Fast RSI scan: {len(candidates)} active pairs..."):st.session_state.r=scan_rsi(candidates,pt,ct,pr,cr,di)
         if search:st.session_state.r=[z for z in st.session_state.r if search.upper() in z["Coin"]]
         if st.session_state.r:st.dataframe(pd.DataFrame(st.session_state.r),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
         else:st.info("Run RSI scan to see matching coins.")
@@ -318,11 +335,12 @@ with left:
 
     elif section=="Confluence Scanner":
         st.markdown('<div class="panel"><div class="panel-title">🎯 Full Confluence Scanner</div>',unsafe_allow_html=True)
-        tf=st.selectbox("Timeframe",RSI_TFS,index=1,key="full_conf_tf");score=st.slider("Minimum score",40,100,75,5,key="full_score")
+        tf=st.selectbox("Timeframe",RSI_TFS,index=1,key="full_conf_tf");score=st.slider("Minimum score",40,100,75,5,key="full_score");full_universe=st.selectbox("Scan universe",[100,150,200,300],index=0,key="full_universe")
         q=st.button("🚀 RUN FULL CONFLUENCE SCAN",use_container_width=True,key="full_conf_scan")
         if q:
             settings={"ema200":True,"ema933":True,"rsi":True,"volume":True,"breakout":True,"ha":True}
-            with st.spinner("Scanning all enabled confirmations..."):st.session_state.c=scan_confluence(ss,tf,score,settings,.25)
+            candidates=active_symbols(full_universe)
+            with st.spinner(f"Scanning {len(candidates)} active pairs..."):st.session_state.c=scan_confluence(candidates,tf,score,settings,.25)
         if st.session_state.c:
             st.dataframe(pd.DataFrame([{k:v for k,v in z.items() if k!="Checks"} for z in st.session_state.c]),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
         else:st.info("Run the scanner to find multi-factor signals.")
@@ -330,9 +348,10 @@ with left:
 
     elif section=="EMA 9/33":
         st.markdown('<div class="panel"><div class="panel-title">📈 EMA 9 / 33 Fresh Bullish Cross</div>',unsafe_allow_html=True)
-        tf=st.selectbox("EMA timeframe",RSI_TFS,index=1,key="ema_page_tf")
+        tf=st.selectbox("EMA timeframe",RSI_TFS,index=1,key="ema_page_tf");ema_universe=st.selectbox("Scan universe",[60,100,150,200],index=1,key="ema_universe")
         if st.button("🔍 SCAN EMA 9/33",use_container_width=True,key="ema_page_scan"):
-            with st.spinner("Finding fresh bullish crosses..."):st.session_state.e=scan_ema(ss,tf)
+            candidates=active_symbols(ema_universe)
+            with st.spinner(f"Checking {len(candidates)} active pairs..."):st.session_state.e=scan_ema(candidates,tf)
         if st.session_state.e:st.dataframe(pd.DataFrame(st.session_state.e),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
         else:st.info("No fresh EMA9/33 bullish cross loaded.")
         st.markdown('</div>',unsafe_allow_html=True)
@@ -341,14 +360,16 @@ with left:
         st.markdown('<div class="panel"><div class="panel-title">🕯️ Heikin Ashi Bullish Scanner</div>',unsafe_allow_html=True)
         tfs=st.multiselect("HA timeframes",TIMEFRAMES,["3m","5m","15m","1h","4h"],key="ha_tfs")
         w=st.slider("Maximum lower wick / body",0.0,1.0,.25,.05,key="ha_wick")
-        minimum=st.slider("Minimum bullish HA timeframes",1,5,3,key="ha_min")
+        minimum=st.slider("Minimum bullish HA timeframes",1,5,3,key="ha_min");ha_universe=st.selectbox("Scan universe",[40,60,80,100],index=1,key="ha_universe")
         if st.button("🔍 SCAN HEIKIN ASHI",use_container_width=True,key="ha_page_scan"):
-            with st.spinner("Checking HA alignment..."):st.session_state.h=scan_ha(ss,tfs,w,minimum)
+            candidates=active_symbols(ha_universe)
+            with st.spinner(f"Checking {len(candidates)} active pairs across {len(tfs)} timeframes..."):st.session_state.h=scan_ha(candidates,tfs,w,minimum)
         if st.session_state.h:st.dataframe(pd.DataFrame(st.session_state.h),use_container_width=True,hide_index=True,column_config={"TradingView":st.column_config.LinkColumn("TradingView",display_text="Open Chart ↗")})
         else:st.info("No HA alignment loaded.")
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Pulse • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
