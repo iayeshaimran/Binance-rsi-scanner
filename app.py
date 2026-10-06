@@ -148,56 +148,138 @@ def ha_early_signal(df,wick=.25):
     except Exception:return False
 
 def price_action(df):
-    # Closed-candle market structure: HH/HL, BOS and bullish engulfing.
+    # Balanced SMC-style structure using closed candles only.
+    # This is intentionally conservative: a close must break structure; a wick alone is not BOS.
     x=df.iloc[:-1]
-    if len(x)<8:
-        return {"hh":False,"hl":False,"bos":False,"engulf":False,"sweep":False}
+    if len(x)<12:
+        return {"hh":False,"hl":False,"bos":False,"choch":False,"engulf":False,"sweep":False}
     h=x["h"].to_numpy(); l=x["l"].to_numpy(); o=x["o"].to_numpy(); c=x["c"].to_numpy()
-    ph1=max(h[-7:-4]); ph2=max(h[-4:-1])
-    pl1=min(l[-7:-4]); pl2=min(l[-4:-1])
-    hh=ph2>ph1
-    hl=pl2>pl1
-    bos=c[-1]>ph1
-    engulf=(c[-1]>o[-1] and c[-2]<o[-2] and c[-1]>=o[-2] and o[-1]<=c[-2])
-    # Liquidity sweep: recent low taken, but candle closed back above that low.
-    ref_low=min(l[-6:-2])
-    sweep=l[-2]<ref_low and c[-2]>ref_low
-    return {"hh":hh,"hl":hl,"bos":bos,"engulf":engulf,"sweep":sweep}
 
-def early_entry_score(df,wick=.25):
+    left_h=max(h[-10:-5]); right_h=max(h[-5:-1])
+    left_l=min(l[-10:-5]); right_l=min(l[-5:-1])
+    hh=right_h>left_h
+    hl=right_l>left_l
+    lh=right_h<left_h
+    ll=right_l<left_l
+
+    # BOS: current closed candle closes beyond the previous structure range.
+    bos_up=c[-1]>left_h
+    bos_down=c[-1]<left_l
+
+    # CHoCH: direction changes after a prior opposite structure.
+    choch=(bos_up and ll) or (bos_down and hh)
+
+    engulf=(c[-1]>o[-1] and c[-2]<o[-2] and c[-1]>=o[-2] and o[-1]<=c[-2])
+
+    # Liquidity sweep: the previous closed candle takes a recent low and closes back above it.
+    ref_low=min(l[-8:-2])
+    sweep=l[-2]<ref_low and c[-2]>ref_low
+
+    return {
+        "hh":hh,"hl":hl,"bos":bos_up,"choch":choch,
+        "engulf":engulf,"sweep":sweep
+    }
+
+def early_entry_score(df,wick=.20):
     x=df.iloc[:-1]
     if len(x)<35:return 0,[]
     score=0;checks=[]
     e9,e33,e200=ema_vals(df)
     close=float(x["c"].iloc[-1])
+
     if close>e9.iloc[-1]:
         score+=10;checks.append(("Price > EMA9",True))
     else: checks.append(("Price > EMA9",False))
+
     if e9.iloc[-1]>e33.iloc[-1]:
         score+=10;checks.append(("EMA9 > EMA33",True))
     else: checks.append(("EMA9 > EMA33",False))
+
     rv=rsi(df); rp=rsi_prev(df)
-    if rv>rp and 45<=rv<=68:
-        score+=15;checks.append(("RSI rising",True))
-    else: checks.append(("RSI rising",False))
+    if rv>rp and 48<=rv<=65:
+        score+=15;checks.append(("RSI rising 48–65",True))
+    else: checks.append(("RSI rising 48–65",False))
+
     vol=float(x["v"].iloc[-1]); avg=float(x["v"].iloc[-22:-1].mean())
     vr=vol/avg if avg else 1
-    if vr>=1.25:
-        score+=15;checks.append(("Volume",True))
-    else: checks.append(("Volume",False))
-    ha=ha_early_signal(df,wick)
-    if ha:
+    if vr>=1.35:
+        score+=15;checks.append(("Volume >= 1.35x",True))
+    else: checks.append(("Volume >= 1.35x",False))
+
+    if ha_early_signal(df,wick):
         score+=20;checks.append(("HA early",True))
     else: checks.append(("HA early",False))
+
     pa=price_action(df)
-    for key,label,pts in [("bos","BOS",15),("engulf","Bullish Engulfing",10),("sweep","Liquidity Sweep",10),("hh","HH",5),("hl","HL",5)]:
-        if pa[key]:
-            score+=pts;checks.append((label,True))
+    # Structure is weighted more heavily than cosmetic candle patterns.
+    if pa["bos"]:
+        score+=15;checks.append(("BOS",True))
+    else: checks.append(("BOS",False))
+    if pa["choch"]:
+        score+=10;checks.append(("CHoCH",True))
+    if pa["sweep"]:
+        score+=10;checks.append(("Liquidity sweep",True))
+    if pa["engulf"]:
+        score+=5;checks.append(("Bullish engulfing",True))
+    if pa["hh"]:
+        score+=5;checks.append(("HH",True))
+    if pa["hl"]:
+        score+=5;checks.append(("HL",True))
+
     return score,checks
 
 def safe_change(t):
     try:return float(t.get("priceChangePercent",0))
     except:return 0.0
+
+def scan_smart_status(ss,tf,early_min=70,confirm_min=85,wick=.20,tp1_pct=1.0,tp2_pct=2.0,sl_pct=1.0):
+    """
+    One scan returns EARLY or CONFIRMED for each coin.
+    The UI can refresh this list automatically, so an EARLY coin becomes
+    CONFIRMED without requiring a separate manual scan.
+    """
+    out=[]
+    def one(s):
+        d=klines(s,tf)
+        if d is None:return None
+        score,checks=early_entry_score(d,wick)
+        # Confirmed uses the existing confluence logic, but requires the key
+        # structural/indicator confirmations to be present.
+        pa=price_action(d)
+        rv=rsi(d); rp=rsi_prev(d)
+        e9,e33,e200=ema_vals(d)
+        close=float(d["c"].iloc[-2])
+        vol=float(d["v"].iloc[-2]); avg=float(d["v"].iloc[-22:-2].mean()) if len(d)>24 else vol
+        vr=vol/avg if avg else 1
+        ha_closed=ha_signal(d,wick)
+        confirmed_checks=[
+            close>e200.iloc[-1],
+            e9.iloc[-1]>e33.iloc[-1],
+            rv>rp and 50<=rv<=65,
+            vr>=1.5,
+            pa["bos"] or pa["choch"],
+            ha_closed
+        ]
+        confirmed=sum(confirmed_checks)>=5 and score>=confirm_min
+        if score<early_min and not confirmed:return None
+        status="CONFIRMED" if confirmed else "EARLY"
+        entry=close
+        return {
+            "Coin":s,"Status":status,"Score":score,
+            "Signal":"CONFIRMED BUY" if confirmed else "EARLY BUY",
+            "Entry":entry,
+            "TP1":entry*(1+tp1_pct/100),"TP2":entry*(1+tp2_pct/100),"SL":entry*(1-sl_pct/100),
+            "TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,
+            "RSI":round(rv,1),"Vol x":round(vr,2),
+            "TradingView":tv(s,tf),"Checks":checks
+        }
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        for f in as_completed([ex.submit(one,s) for s in ss]):
+            try:
+                z=f.result()
+                if z:out.append(z)
+            except Exception:pass
+    return sorted(out,key=lambda x:(1 if x["Status"]=="CONFIRMED" else 0,x["Score"]),reverse=True)
 
 def scan_early(ss,tf,minimum,wick,tp1_pct=1.0,tp2_pct=2.0,sl_pct=1.0):
     out=[]
@@ -209,7 +291,7 @@ def scan_early(ss,tf,minimum,wick,tp1_pct=1.0,tp2_pct=2.0,sl_pct=1.0):
         entry=float(d["c"].iloc[-1])
         label="EARLY BUY" if score>=60 else "EARLY WATCH"
         return {
-            "Coin":s,"Score":score,"Signal":label,"Entry":entry,
+            "Coin":s,"Status":"EARLY","Score":score,"Signal":label,"Entry":entry,
             "TP1":entry*(1+tp1_pct/100),"TP2":entry*(1+tp2_pct/100),"SL":entry*(1-sl_pct/100),
             "TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,
             "RSI":round(rsi(d),1),"TradingView":tv(s,tf),"Checks":checks
@@ -539,10 +621,10 @@ with left:
         e1,e2,e3=st.columns(3)
         with e1:
             etf=st.selectbox("Early Entry timeframe",["3m","5m","15m","1h"],index=1,key="early_tf")
-            emin=st.slider("Minimum early score",30,100,55,5,key="early_score")
+            emin=st.slider("Minimum early score",50,100,70,5,key="early_score")
         with e2:
             euni=st.selectbox("Scan universe",[40,60,100,150,200],index=1,key="early_uni")
-            ewick=st.slider("HA lower-wick tolerance",0.0,1.0,.20,.05,key="early_wick")
+            ewick=st.slider("HA lower-wick tolerance",0.0,1.0,.15,.05,key="early_wick")
         with e3:
             eauto=st.toggle("⚡ Auto scan",value=True,key="early_auto")
             e_refresh=st.selectbox("Refresh seconds",[5,10,15,30,60],index=1,key="early_refresh")
@@ -555,17 +637,20 @@ with left:
         due=time.time()-st.session_state.early_last>=e_refresh
         if manual or (eauto and due):
             candidates=active_symbols(euni)
-            with st.spinner(f"Early scan: {len(candidates)} active pairs..."):
-                st.session_state.early=scan_early(candidates,etf,emin,ewick,e_tp1,e_tp2,e_sl)
+            with st.spinner(f"Smart scan: {len(candidates)} active pairs..."):
+                st.session_state.early=scan_smart_status(
+                    candidates,etf,early_min=emin,confirm_min=max(85,emin+15),
+                    wick=ewick,tp1_pct=e_tp1,tp2_pct=e_tp2,sl_pct=e_sl
+                )
             st.session_state.early_last=time.time()
         if st.session_state.get("early"):
             for z in st.session_state.early[:15]:
                 checks=" • ".join([("✓ " if ok else "○ ")+name for name,ok in z["Checks"]])
                 levels=f'<span class="lvl entry">Entry {z["Entry"]:.8g}</span><span class="lvl tp">TP1 {z["TP1"]:.8g} (+{z["TP1 %"]:.1f}%)</span><span class="lvl tp">TP2 {z["TP2"]:.8g} (+{z["TP2 %"]:.1f}%)</span><span class="lvl sl">SL {z["SL"]:.8g} (-{z["SL %"]:.1f}%)</span>'
-                st.markdown(f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge buy">{z["Signal"]}</span></div><div class="score green">{z["Score"]}</div></div><div class="muted">RSI {z["RSI"]} • <a href="{z["TradingView"]}" target="_blank">TradingView ↗</a></div><div class="levels">{levels}</div><div class="checks">{checks}</div></div>',unsafe_allow_html=True)
+                st.markdown(f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge buy">{z["Status"]}</span> <span class="badge buy">{z["Signal"]}</span></div><div class="score green">{z["Score"]}</div></div><div class="muted">RSI {z["RSI"]} • <a href="{z["TradingView"]}" target="_blank">TradingView ↗</a></div><div class="levels">{levels}</div><div class="checks">{checks}</div></div>',unsafe_allow_html=True)
         else:
             st.info("No early-entry setup currently meets the score.")
-        st.caption("Early mode intentionally uses the live forming candle for timing. Treat it as an early alert, not a guaranteed entry.")
+        st.caption("EARLY watches the setup forming. CONFIRMED appears automatically on refresh when the stronger closed-candle structure confirms it — no second manual scan is required.")
         st.markdown('</div>',unsafe_allow_html=True)
 
     elif section=="RSI Scanner":
@@ -632,6 +717,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
