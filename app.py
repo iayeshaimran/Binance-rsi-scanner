@@ -131,8 +131,18 @@ if heat:
         ("🟠 Neutral",[x for x in heat if 30<=x[1]<60],"orange"),
         ("🟢 Gainers Zone",[x for x in heat if x[1]>=60],"")]:
         st.markdown(f"**{title} — {len(items)} coins**",unsafe_allow_html=True)
-        html='<div class="grid">'+''.join(f'<div class="coin {cls}"><b>{s.replace("USDT","")}</b><br><small>RSI: {v:.1f}</small></div>' for s,v in items)+'</div>'
-        st.markdown(html,unsafe_allow_html=True)
+        cards = []
+        for s, v in items:
+            name = s.replace("USDT", "")
+            link = tv(s, ht)
+            cards.append(
+                f'<a href="{link}" target="_blank" class="coin {cls}" '
+                f'style="text-decoration:none;color:inherit;display:block;">'
+                f'<b>{name}</b><br><small>RSI: {v:.1f}</small>'
+                f'</a>'
+            )
+        html = '<div class="grid">' + ''.join(cards) + '</div>'
+        st.markdown(html, unsafe_allow_html=True)
 else:st.info("Update the heatmap to load coins.")
 
 st.subheader("🔍 RSI Scanner")
@@ -160,5 +170,6 @@ if st.session_state.get("h"):st.dataframe(pd.DataFrame(st.session_state["h"]),us
 
 st.markdown("---")
 st.caption("Technical scanner only • Binance Public Spot API • Not financial advice")
+
 
 
