@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+import time
 
 st.set_page_config(page_title="COCO Pulse", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
 
@@ -24,10 +25,10 @@ section[data-testid="stSidebar"] .block-container{padding-top:1rem}
 .hero h1{margin:0;font-size:30px;letter-spacing:-.7px}.hero-sub{color:var(--muted);margin-top:5px}.live{color:var(--green);font-weight:800}.live-dot{display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;margin-right:5px;box-shadow:0 0 10px var(--green)}
 .panel{background:rgba(13,21,33,.93);border:1px solid var(--line);border-radius:18px;padding:15px;margin:0 0 14px 0;box-shadow:0 8px 25px rgba(0,0,0,.13)}
 .panel-title{font-size:18px;font-weight:800;margin-bottom:10px}.muted{color:var(--muted)}
-.stat{background:linear-gradient(180deg,#101b2b,#0c1420);border:1px solid #21334a;border-radius:15px;padding:13px 15px;min-height:88px}.stat-k{color:#7f91aa;font-size:12px;text-transform:uppercase;letter-spacing:.8px}.stat-v{font-size:25px;font-weight:900;margin-top:4px}.green{color:var(--green)}.redtxt{color:var(--red)}.amber{color:var(--amber)}.blue{color:var(--blue)}
+.stat{background:linear-gradient(180deg,#101b2b,#0c1420);border:1px solid #21334a;border-radius:15px;padding:13px 15px;min-height:88px}.stat-k{color:#7f91aa;font-size:12px;text-transform:uppercase;letter-spacing:.8px}.stat-v{font-size:25px;font-weight:900;margin-top:4px}.market-card{border-color:#6b3946;box-shadow:0 0 22px rgba(255,99,118,.08)}.green{color:var(--green)}.redtxt{color:var(--red)}.amber{color:var(--amber)}.blue{color:var(--blue)}
 .mover{display:flex;justify-content:space-between;align-items:center;background:#0e1927;border:1px solid #203149;border-radius:11px;padding:9px 11px;margin:6px 0;text-decoration:none;color:#fff}.mover:hover{border-color:#49f08b;transform:translateX(2px)}
 .zone-head{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:900;margin:12px 2px 7px}.zone-count{font-size:12px;color:#8494aa;font-weight:600}.heat-grid{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px}.coin{display:block;text-decoration:none;color:#fff;text-align:center;border-radius:11px;padding:9px 5px;background:linear-gradient(180deg,#172338,#111b2b);border:1px solid #30445f;transition:.14s;min-height:55px}.coin:hover{transform:translateY(-2px);border-color:#68c9ff;box-shadow:0 5px 18px rgba(74,183,255,.14)}.coin b{font-size:12px}.coin small{font-size:10px;color:#aab7c9}.coin .chg{font-size:10px;font-weight:800;margin-left:2px}.coin.hot{background:linear-gradient(180deg,#183c2b,#10251d);border-color:#2c704d}.coin.warn{background:linear-gradient(180deg,#3a3118,#211e13);border-color:#77612a}.coin.red{background:linear-gradient(180deg,#3a2027,#21151a);border-color:#78414c}.coin.bluezone{background:linear-gradient(180deg,#17334b,#13243a);border-color:#3b6c92}
-.pill-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px}.pill{border:1px solid #31435a;background:#101a29;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:800}.pill.greenp{border-color:#27704b;color:#6ff1a2}.pill.bluep{border-color:#356b95;color:#82caff}.pill.amberp{border-color:#7b6428;color:#ffd66c}.pill.redp{border-color:#7d3e4b;color:#ff8997}
+.pill-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px}.zone-filter{display:flex;flex-wrap:wrap;gap:9px;margin:8px 0 12px}.zone-label{font-size:12px;color:#8798ad;font-weight:800;align-self:center}.pill{border:1px solid #31435a;background:#101a29;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:800}.pill.greenp{border-color:#27704b;color:#6ff1a2}.pill.bluep{border-color:#356b95;color:#82caff}.pill.amberp{border-color:#7b6428;color:#ffd66c}.pill.redp{border-color:#7d3e4b;color:#ff8997}
 .signal{border:1px solid #243750;background:linear-gradient(145deg,#111d2d,#0b131f);border-radius:15px;padding:12px;margin:7px 0}.signal-top{display:flex;justify-content:space-between;align-items:center}.score{font-size:22px;font-weight:900}.badge{font-size:10px;font-weight:900;border-radius:999px;padding:5px 8px}.buy{background:#153e2a;color:#72f2a5;border:1px solid #2c8156}.watch{background:#3b3216;color:#ffd66a;border:1px solid #7b652a}.checks{color:#aebaca;font-size:11px;line-height:1.65;margin-top:6px}
 .side-card{background:#0e1826;border:1px solid #213149;border-radius:14px;padding:12px;margin-bottom:10px}.side-title{font-weight:900;font-size:15px;margin-bottom:8px}.side-row{display:flex;justify-content:space-between;padding:7px 8px;border-radius:9px;background:#101d2d;margin:5px 0;color:#c5cfdd;font-size:12px}.idle{color:#7e8da0}.active{color:var(--green);font-weight:800}.danger{color:var(--red);font-weight:800}
 div[data-testid="stButton"] button{background:#142236!important;color:#f5f8fc!important;border:1px solid #31506e!important;border-radius:10px!important;font-weight:800!important;min-height:42px!important}div[data-testid="stButton"] button:hover{background:#18342d!important;border-color:#49f08b!important}
@@ -218,19 +219,129 @@ def render_heatmap(rows,tf):
     groups=[
         ("🔴 10–20 Extreme",[x for x in rows if 10<=x["rsi"]<20],"red"),
         ("🟠 20–30 Oversold",[x for x in rows if 20<=x["rsi"]<30],"warn"),
-        ("🔵 30–40 Hidden Bull / Watch",[x for x in rows if 30<=x["rsi"]<40],"bluezone"),
+        ("🔵 30–40 Hidden Bull & ICT",[x for x in rows if 30<=x["rsi"]<40],"bluezone"),
         ("⚪ 40–50 Neutral",[x for x in rows if 40<=x["rsi"]<50],""),
-        ("🟢 50–60 V1 Zone",[x for x in rows if 50<=x["rsi"]<60],""),
+        ("🟢 50–60 V1 Zone",[x for x in rows if 50<=x["rsi"]<60],"hot"),
         ("🚀 60+ Gainers",[x for x in rows if x["rsi"]>=60],"hot"),
     ]
-    for title,items,cls in groups:
-        st.markdown(f'<div class="zone-head">{title} <span class="zone-count">{len(items)} coins</span></div>',unsafe_allow_html=True)
-        if not items:
-            st.markdown('<div class="small-note">No coins in this zone right now.</div>',unsafe_allow_html=True);continue
-        html='<div class="heat-grid">'
-        for z in items:
-            html+=f'<a class="coin {cls}" href="{tv(z["symbol"],tf)}" target="_blank" rel="noopener noreferrer"><b>{z["symbol"].replace("USDT","")}</b><br><small>RSI {z["rsi"]:.1f}</small><br><span class="chg">{z["change"]:+.1f}%</span></a>'
-        st.markdown(html+'</div>',unsafe_allow_html=True)
+
+    labels=["10–20 Extreme","20–30 Oversold","30–40 Hidden Bull & ICT",
+            "40–50 Neutral","50–60 V1 Zone","60+ Gainers"]
+    keys=["extreme","oversold","hidden","neutral","v1","gainers"]
+    colors=["redp","amberp","bluep","","greenp","greenp"]
+
+    if "heat_zone" not in st.session_state:
+        st.session_state.heat_zone="gainers"
+
+    st.markdown('<div class="zone-filter"><span class="zone-label">RSI ZONES</span>',unsafe_allow_html=True)
+    cols=st.columns(6)
+    for i,(label,key) in enumerate(zip(labels,keys)):
+        with cols[i]:
+            if st.button(label,use_container_width=True,key=f"heat_zone_{key}"):
+                st.session_state.heat_zone=key
+    st.markdown('</div>',unsafe_allow_html=True)
+
+    idx=keys.index(st.session_state.heat_zone)
+    title,items,cls=groups[idx]
+
+    # Small live highlight: strongest rising RSI in the 52–55 band.
+    rising=[x for x in rows if 52<=x["rsi"]<55 and x.get("change",0)>0]
+    if rising:
+        hot=max(rising,key=lambda x:x["rsi"])
+        st.markdown(
+            f'<div class="small-note">⬜ <b>RSI 52–55 Rising:</b> '
+            f'<span class="amber">{hot["symbol"].replace("USDT","")} RSI:{hot["rsi"]:.1f}</span></div>',
+            unsafe_allow_html=True
+        )
+
+    st.markdown(
+        f'<div class="zone-head">{title} <span class="zone-count">{len(items)} coins</span></div>',
+        unsafe_allow_html=True
+    )
+
+    if not items:
+        st.markdown('<div class="small-note">No coins in this zone right now.</div>',unsafe_allow_html=True)
+        return
+
+    html='<div class="heat-grid">'
+    for z in items:
+        html+=(
+            f'<a class="coin {cls}" href="{tv(z["symbol"],tf)}" '
+            f'target="_blank" rel="noopener noreferrer">'
+            f'<b>{z["symbol"].replace("USDT","")}</b><br>'
+            f'<small>RSI {z["rsi"]:.1f}</small><br>'
+            f'<span class="chg">{z["change"]:+.1f}%</span></a>'
+        )
+    st.markdown(html+'</div>',unsafe_allow_html=True)
+
+
+@st.fragment(run_every=5)
+def dashboard_heatmap():
+    st.markdown(
+        '<div class="panel"><div class="panel-title">📊 RSI Heatmap '
+        '<span class="live">LIVE</span></div>',
+        unsafe_allow_html=True
+    )
+
+    h1,h2,h3,h4=st.columns([1.15,0.9,0.95,1.15])
+    with h1:
+        ht=st.selectbox("Heatmap timeframe",RSI_TFS,index=1,key="dash_heat_tf")
+    with h2:
+        limit_heat=st.selectbox("Scan universe",[60,100,150,200],index=1,key="heat_universe")
+    with h3:
+        auto_heat=st.toggle("🔄 Auto Update",value=True,key="heat_auto")
+    with h4:
+        refresh_heat=st.button("⚡ UPDATE NOW",use_container_width=True,key="dash_heat_btn")
+
+    import time as _time
+    if "heat_last_update" not in st.session_state:
+        st.session_state.heat_last_update=0.0
+    if "heat_next_update" not in st.session_state:
+        st.session_state.heat_next_update=0.0
+
+    now=_time.time()
+    due=now >= st.session_state.heat_next_update
+    should_update=refresh_heat or (auto_heat and due)
+
+    if should_update:
+        with st.spinner(f"Updating RSI heatmap • {limit_heat} active coins..."):
+            rows=[]
+            candidates=active_symbols(limit_heat)
+            with ThreadPoolExecutor(max_workers=16) as ex:
+                fs={ex.submit(klines,s,ht):s for s in candidates}
+                for f in as_completed(fs):
+                    try:
+                        d=f.result()
+                        if d is not None:
+                            rows.append({
+                                "symbol":fs[f],
+                                "rsi":rsi(d),
+                                "change":safe_change(tickers.get(fs[f],{}))
+                            })
+                    except Exception:
+                        pass
+            st.session_state.heat=sorted(rows,key=lambda x:x["rsi"],reverse=True)
+            st.session_state.heat_last_update=_time.time()
+            st.session_state.heat_next_update=st.session_state.heat_last_update+60
+
+    if st.session_state.heat:
+        remaining=max(0,int(st.session_state.heat_next_update-_time.time()))
+        if auto_heat:
+            st.caption(
+                f"🟢 Auto update ON • Updated: "
+                f"{_time.strftime('%H:%M:%S',_time.localtime(st.session_state.heat_last_update))}"
+                f" • Next update in: {remaining}s"
+            )
+        else:
+            st.caption(
+                f"⚪ Auto update OFF • Updated: "
+                f"{_time.strftime('%H:%M:%S',_time.localtime(st.session_state.heat_last_update))}"
+            )
+        render_heatmap(st.session_state.heat,ht)
+    else:
+        st.info("Heatmap is loading automatically. You can also press UPDATE NOW.")
+
+    st.markdown('</div>',unsafe_allow_html=True)
 
 # ----------------------------- state -----------------------------
 ss=get_symbols(); tickers=get_tickers()
@@ -281,26 +392,7 @@ with right:
 
 with left:
     if section=="Dashboard":
-        st.markdown('<div class="panel"><div class="panel-title">📊 RSI Heatmap <span class="live">LIVE</span></div>',unsafe_allow_html=True)
-        h1,h2,h3=st.columns([1.2,1,1])
-        with h1:ht=st.selectbox("Heatmap timeframe",RSI_TFS,index=1,key="dash_heat_tf")
-        with h2:limit_heat=st.selectbox("Scan universe",[60,100,150,200],index=1)
-        with h3:refresh_heat=st.button("🔄 UPDATE HEATMAP",use_container_width=True,key="dash_heat_btn")
-        if refresh_heat:
-            with st.spinner(f"Scanning RSI for {limit_heat} coins..."):
-                rows=[]
-                candidates=active_symbols(limit_heat)
-                with ThreadPoolExecutor(max_workers=16) as ex:
-                    fs={ex.submit(klines,s,ht):s for s in candidates}
-                    for f in as_completed(fs):
-                        try:
-                            d=f.result()
-                            if d is not None:rows.append({"symbol":fs[f],"rsi":rsi(d),"change":safe_change(tickers.get(fs[f],{}))})
-                        except Exception:pass
-                st.session_state.heat=sorted(rows,key=lambda x:x["rsi"],reverse=True)
-        if st.session_state.heat:render_heatmap(st.session_state.heat,ht)
-        else:st.info("Press UPDATE HEATMAP to load the live RSI zones.")
-        st.markdown('</div>',unsafe_allow_html=True)
+        dashboard_heatmap()
 
         st.markdown('<div class="panel"><div class="panel-title">🎯 Confluence Signal Scanner</div><div class="muted">Combine EMA trend + EMA9/33 + RSI momentum + volume + breakout + Heikin Ashi into one score.</div>',unsafe_allow_html=True)
         a1,a2,a3=st.columns(3)
@@ -369,6 +461,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Pulse • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
