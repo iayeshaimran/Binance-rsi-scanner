@@ -9,7 +9,10 @@ import time
 
 st.set_page_config(page_title="COCO Nexus", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
 
-BASE = "https://data-apiRSI_TFS = ["5m", "15m", "1h", "4h"]
+BASE = 
+"https://data-api.binance.vision"
+
+RSI_TFS = ["5m", "15m", "1h", "4h"]
 
 # ----------------------------- UI -----------------------------
 st.markdown(r"""
