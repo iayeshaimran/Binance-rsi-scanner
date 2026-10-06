@@ -125,101 +125,149 @@ def safe_change(t):
     try:return float(t.get("priceChangePercent",0))
     except:return 0.0
 
-def structure_metrics(df, lookback=30):
-    """Balanced market-structure model using confirmed candle closes."""
-    x=df.iloc[:-1].copy()
-    if len(x)<12:
-        return {"bos":False,"choch":False,"hh":False,"hl":False,"sweep":False,"last_high":None,"last_low":None}
-    n=min(lookback,len(x)-3)
-    highs=x["h"].iloc[-n:]
-    lows=x["l"].iloc[-n:]
-    # Most recent meaningful swing levels. Exclude the latest 2 candles from the reference.
-    ref=x.iloc[-(n+2):-2]
-    if len(ref)<5:
-        ref=x.iloc[:-2]
-    last_high=float(ref["h"].max()); last_low=float(ref["l"].min())
-    close=float(x["c"].iloc[-1]); prev_close=float(x["c"].iloc[-2])
-    prior_high=float(x["h"].iloc[-8:-2].max()) if len(x)>=10 else last_high
-    prior_low=float(x["l"].iloc[-8:-2].min()) if len(x)>=10 else last_low
-    # Simple swing direction: compare two recent windows.
-    mid=max(3,min(7,len(x)//5))
-    a=x.iloc[-2*mid:-mid]; b=x.iloc[-mid:]
-    ah=float(a["h"].max()); al=float(a["l"].min()); bh=float(b["h"].max()); bl=float(b["l"].min())
-    hh=bh>ah and bh>=prior_high
-    hl=bl>al
-    ll=bl<al
-    # BOS: close through a meaningful prior high. CHoCH: bullish close through a prior lower structure.
-    bos=close>last_high or close>prior_high
-    choch=close>prior_high and al<ah
-    # Bullish liquidity sweep: wick below a recent low, then close back above it.
-    recent_low=float(x["l"].iloc[-8:-2].min()) if len(x)>=10 else last_low
-    sweep=float(x["l"].iloc[-1])<recent_low and close>recent_low
-    return {"bos":bool(bos),"choch":bool(choch),"hh":bool(hh),"hl":bool(hl),"sweep":bool(sweep),"last_high":last_high,"last_low":last_low}
 
-def ha_components(df, include_live=False):
-    x=df.copy() if include_live else df.iloc[:-1].copy()
-    if len(x)<4:return None
-    hc=(x.o+x.h+x.l+x.c)/4
-    ho=np.zeros(len(x)); ho[0]=(x.o.iloc[0]+x.c.iloc[0])/2
-    for i in range(1,len(x)): ho[i]=(ho[i-1]+hc.iloc[i-1])/2
-    hh=np.maximum.reduce([x.h.to_numpy(),ho,hc.to_numpy()])
-    hl=np.minimum.reduce([x.l.to_numpy(),ho,hc.to_numpy()])
-    return ho,hc,hh,hl
+def structure_signal(df):
+    x=df.iloc[:-1]
+    if len(x)<30:
+        return {"bos":False,"choch":False,"hh":False,"hl":False,"sweep":False}
+    h=x["h"].to_numpy(); l=x["l"].to_numpy(); c=x["c"].to_numpy()
+    # Conservative structure: compare two closed swing windows.
+    ph_old=float(max(h[-12:-6])); ph_new=float(max(h[-6:-1]))
+    pl_old=float(min(l[-12:-6])); pl_new=float(min(l[-6:-1]))
+    hh=ph_new>ph_old
+    hl=pl_new>pl_old
+    bos= c[-1] > ph_old
+    prior_bearish = pl_new < pl_old
+    choch = bos and prior_bearish
+    ref_low=float(min(l[-8:-2]))
+    sweep=float(l[-2]) < ref_low and float(c[-2]) > ref_low
+    return {"bos":bos,"choch":choch,"hh":hh,"hl":hl,"sweep":sweep}
 
-def ha_state(df, wick=.25, include_live=False):
-    try:
-        z=ha_components(df,include_live)
-        if z is None:return {"early":False,"confirmed":False,"count":0,"no_wick":False}
-        ho,hc,hh,hl=z
-        a,b=-2,-1
-        green_a=hc[a]>ho[a]; green_b=hc[b]>ho[b]
-        higher_close=hc[b]>hc[a]; higher_high=hh[b]>hh[a]
-        ba=abs(hc[a]-ho[a]); bb=abs(hc[b]-ho[b])
-        wa=((min(ho[a],hc[a])-hl[a])/ba) if ba else 99
-        wb=((min(ho[b],hc[b])-hl[b])/bb) if bb else 99
-        no_wick=wa<=wick and wb<=wick
-        confirmed=green_a and green_b and higher_close and higher_high and no_wick
-        # Early: previous closed HA candle is bullish and the current candle is forming bullish.
-        early=green_a and green_b and higher_close and (wb<=wick*1.35 if wick>0 else wb<=0.03)
-        return {"early":bool(early),"confirmed":bool(confirmed),"count":2 if green_a and green_b else 1 if green_b else 0,"no_wick":bool(no_wick),"lower_wick":round(wb,3)}
-    except Exception:
-        return {"early":False,"confirmed":False,"count":0,"no_wick":False}
+def tf_state(symbol,tf,wick=.20):
+    d=klines(symbol,tf)
+    if d is None:return None
+    close=float(d["c"].iloc[-2])
+    e9,e33,e200=ema_vals(d)
+    rv=rsi(d); rp=rsi_prev(d)
+    vol=float(d["v"].iloc[-2])
+    avg=float(d["v"].iloc[-22:-2].mean()) if len(d)>24 else vol
+    vr=vol/avg if avg else 1
+    pa=structure_signal(d)
+    return {
+        "close":close,"e9":float(e9.iloc[-1]),"e33":float(e33.iloc[-1]),
+        "e200":float(e200.iloc[-1]),"rsi":rv,"rsi_prev":rp,"volx":vr,
+        "ha":ha_signal(d,wick),"pa":pa
+    }
 
-def scan_smart_confluence(ss,tf,minimum,settings,wick):
+def scan_mtf_early_confirmed(ss,early_min=60,confirm_min=80,wick=.20,
+                             tp1_pct=1.0,tp2_pct=2.0,sl_pct=1.0):
+    """
+    5m = EARLY timing
+    15m = ENTRY confirmation
+    1h = confirmation
+    4h = trend filter
+    The scan keeps EARLY rows visible so they can become CONFIRMED
+    on the next automatic refresh.
+    """
+    out=[]
+    def one(s):
+        a=tf_state(s,"5m",wick); b=tf_state(s,"15m",wick)
+        c=tf_state(s,"1h",wick); d=tf_state(s,"4h",wick)
+        if not all([a,b,c,d]): return None
+
+        early_checks = [
+            a["e9"]>a["e33"],
+            a["rsi"]>a["rsi_prev"] and 45<=a["rsi"]<=68,
+            a["ha"],
+            a["volx"]>=1.20,
+            a["pa"]["bos"] or a["pa"]["choch"] or a["pa"]["sweep"],
+            b["close"]>=b["e33"]
+        ]
+        early_score=sum(15 for x in early_checks if x)
+        if early_score < early_min:
+            return None
+
+        confirm_checks = [
+            b["e9"]>b["e33"],
+            b["rsi"]>b["rsi_prev"] and 48<=b["rsi"]<=68,
+            b["ha"],
+            b["volx"]>=1.20,
+            b["pa"]["bos"] or b["pa"]["choch"],
+            c["e9"]>c["e33"] and c["close"]>c["e200"],
+            c["rsi"]>=50,
+            d["close"]>d["e200"] and d["e9"]>d["e33"]
+        ]
+        confirm_score=sum(12.5 for x in confirm_checks if x)
+        confirmed=confirm_score>=confirm_min
+
+        status="CONFIRMED" if confirmed else "EARLY"
+        stage="5m ✓ → 15m ✓ → 1H ✓ → 4H ✓" if confirmed else "5m ✓ → Waiting for 15m/1H confirmation"
+        entry=b["close"] if confirmed else a["close"]
+
+        checks = [
+            ("5m EMA9>33",a["e9"]>a["e33"]),
+            ("5m RSI rising",a["rsi"]>a["rsi_prev"]),
+            ("5m HA",a["ha"]),
+            ("5m structure",a["pa"]["bos"] or a["pa"]["choch"] or a["pa"]["sweep"]),
+            ("15m EMA9>33",b["e9"]>b["e33"]),
+            ("15m structure",b["pa"]["bos"] or b["pa"]["choch"]),
+            ("1H bullish",c["close"]>c["e200"] and c["e9"]>c["e33"]),
+            ("4H bullish",d["close"]>d["e200"] and d["e9"]>d["e33"])
+        ]
+        return {
+            "Coin":s,"Status":status,"Stage":stage,
+            "Score":round(confirm_score if confirmed else early_score,1),
+            "Signal":"CONFIRMED BUY" if confirmed else "EARLY BUY",
+            "Entry":entry,
+            "TP1":entry*(1+tp1_pct/100),"TP2":entry*(1+tp2_pct/100),
+            "SL":entry*(1-sl_pct/100),
+            "TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,
+            "5m RSI":round(a["rsi"],1),"15m RSI":round(b["rsi"],1),
+            "1H RSI":round(c["rsi"],1),"4H RSI":round(d["rsi"],1),
+            "TradingView":tv(s,"15m"),"Checks":checks
+        }
+
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        for f in as_completed([ex.submit(one,s) for s in ss]):
+            try:
+                z=f.result()
+                if z: out.append(z)
+            except Exception:
+                pass
+    return sorted(out,key=lambda z:(1 if z["Status"]=="CONFIRMED" else 0,z["Score"]),reverse=True)
+
+def scan_confluence(ss,tf,minimum,settings,wick):
     out=[]
     def one(s):
         d=klines(s,tf)
         if d is None:return None
-        closed=d.iloc[:-1]
-        if len(closed)<35:return None
-        close=float(closed["c"].iloc[-1])
+        score=0;checks=[];close=float(d["c"].iloc[-2])
         e9,e33,e200=ema_vals(d)
+        if settings["ema200"]:
+            ok=close>e200.iloc[-1];score+=20 if ok else 0;checks.append(("EMA200",ok))
+        if settings["ema933"]:
+            ok=e9.iloc[-1]>e33.iloc[-1] or (e9.iloc[-2]<=e33.iloc[-2] and e9.iloc[-1]>e33.iloc[-1]);score+=20 if ok else 0;checks.append(("EMA9/33",ok))
         rv=rsi(d); rp=rsi_prev(d)
-        vol=float(closed["v"].iloc[-1]); avg=float(closed["v"].iloc[-22:-1].mean()) if len(closed)>23 else vol
+        if settings["rsi"]:
+            ok=50<=rv<=65 and rv>rp;score+=15 if ok else 0;checks.append(("RSI momentum",ok))
+        vol=float(d["v"].iloc[-2]);avg=float(d["v"].iloc[-22:-2].mean()) if len(d)>24 else vol
         vr=vol/avg if avg else 1
-        stx=structure_metrics(d)
-        ha_live=ha_state(d,wick,True); ha_closed=ha_state(d,wick,False)
-        checks=[]; score=0
-        def add(name,ok,pts):
-            nonlocal score
-            score+=pts if ok else 0; checks.append((name,bool(ok)))
-        add("EMA200 trend",close>e200.iloc[-1],15)
-        add("EMA9 > EMA33",e9.iloc[-1]>e33.iloc[-1],15)
-        add("RSI rising",50<=rv<=68 and rv>rp,10)
-        add("Volume",vr>=1.25,10)
-        add("BOS",stx["bos"],15)
-        add("CHoCH",stx["choch"],10)
-        add("HH/HL",stx["hh"] or stx["hl"],8)
-        add("Liquidity sweep",stx["sweep"],12)
-        add("HA early",ha_live["early"],8)
-        add("HA confirmed",ha_closed["confirmed"],10)
-        # Early is intentionally selective: at least one structure event plus HA/EMA/RSI/volume confluence.
-        early_ok=(ha_live["early"] and rv>rp and vr>=1.15 and (close>=e9.iloc[-1]*0.998) and (stx["sweep"] or stx["choch"] or stx["bos"]))
-        confirmed_ok=(score>=minimum and ha_closed["confirmed"] and close>e9.iloc[-1]>e33.iloc[-1] and rv>rp and vr>=1.25 and (stx["bos"] or stx["choch"]))
-        if not early_ok and not confirmed_ok:return None
-        status="CONFIRMED" if confirmed_ok else "EARLY"
+        if settings["volume"]:
+            ok=vr>=1.5;score+=20 if ok else 0;checks.append(("Volume spike",ok))
+        prior_high=float(d["h"].iloc[-22:-2].max())
+        if settings["breakout"]:
+            ok=close>prior_high and vr>=1.2;score+=15 if ok else 0;checks.append(("20-bar breakout",ok))
+        if settings["ha"]:
+            ok=ha_signal(d,wick);score+=10 if ok else 0;checks.append(("Heikin Ashi",ok))
+        if score<minimum:return None
+        label="STRONG BUY" if score>=90 else "BUY" if score>=80 else "WATCH"
         tp1_pct=float(settings.get("tp1_pct",1.0)); tp2_pct=float(settings.get("tp2_pct",2.0)); sl_pct=float(settings.get("sl_pct",1.0))
-        return {"Coin":s,"Score":score,"Status":status,"Signal":"STRONG BUY" if confirmed_ok else "EARLY BUY","Entry":close,"TP1":close*(1+tp1_pct/100),"TP2":close*(1+tp2_pct/100),"SL":close*(1-sl_pct/100),"TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,"RSI":round(rv,1),"Vol x":round(vr,2),"BOS":stx["bos"],"CHoCH":stx["choch"],"HH/HL":stx["hh"] or stx["hl"],"Liquidity Sweep":stx["sweep"],"HA":ha_closed["confirmed"],"TradingView":tv(s,tf),"Checks":checks}
+        return {
+            "Coin":s,"Score":score,"Signal":label,"Entry":close,
+            "TP1":close*(1+tp1_pct/100),"TP2":close*(1+tp2_pct/100),"SL":close*(1-sl_pct/100),
+            "TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,
+            "RSI":round(rv,1),"Vol x":round(vr,2),"TradingView":tv(s,tf),"Checks":checks
+        }
     with ThreadPoolExecutor(max_workers=16) as ex:
         fs=[ex.submit(one,s) for s in ss]
         for f in as_completed(fs):
@@ -227,8 +275,7 @@ def scan_smart_confluence(ss,tf,minimum,settings,wick):
                 z=f.result()
                 if z:out.append(z)
             except Exception:pass
-    return sorted(out,key=lambda x:(x["Status"]=="CONFIRMED",x["Score"],x["RSI"]),reverse=True)
-
+    return sorted(out,key=lambda x:(x["Score"],x["RSI"]),reverse=True)
 
 def scan_rsi(ss,tf,confirm,rr,cr,direction):
     def okrange(v,r):
@@ -416,12 +463,12 @@ with st.sidebar:
     st.markdown("## 🟢 COCO Nexus")
     st.caption("Professional Binance signal dashboard")
     st.markdown("### Navigation")
-    section=st.radio("",["Dashboard","RSI Scanner","Confluence Scanner","EMA 9/33","Heikin Ashi"],label_visibility="collapsed")
+    section=st.radio("",["Dashboard","Smart MTF Entry","RSI Scanner","Confluence Scanner","EMA 9/33","Heikin Ashi"],label_visibility="collapsed")
     st.markdown("### Chart Settings")
     chart_tf=st.selectbox("TradingView timeframe",RSI_TFS,index=2)
     search=st.text_input("🔎 Find coin",placeholder="BTC, XRP, DOGE...")
     st.markdown("### Scanner Status")
-    st.markdown('<div class="side-row"><span>RSI Heatmap</span><span class="active">● LIVE</span></div><div class="side-row"><span>EMA Crossover</span><span class="idle">Ready</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">Ready</span></div><div class="side-row"><span>Smart Entry</span><span class="active">LIVE</span></div><div class="side-row"><span>Confluence</span><span class="idle">Ready</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="side-row"><span>RSI Heatmap</span><span class="active">● LIVE</span></div><div class="side-row"><span>EMA Crossover</span><span class="idle">Ready</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">Ready</span></div><div class="side-row"><span>Confluence</span><span class="idle">Ready</span></div>',unsafe_allow_html=True)
     st.caption("⚡ Fast mode: scans the most active pairs first")
 
 # ----------------------------- live top clock -----------------------------
@@ -463,58 +510,83 @@ with left:
     if section=="Dashboard":
         dashboard_heatmap()
 
-        @st.fragment(run_every=15)
-        def smart_entry_panel():
-            st.markdown('<div class="panel"><div class="panel-title">🧠 Smart Entry Scanner <span class="live">LIVE</span></div><div class="muted">Early + Confirmed price-action confluence. Status automatically upgrades without pressing Scan again.</div>',unsafe_allow_html=True)
-            a1,a2,a3=st.columns(3)
-            with a1:
-                ctf=st.selectbox("Signal timeframe",RSI_TFS,index=1,key="smart_tf")
-                minscore=st.slider("Minimum confirmed score",60,100,80,5,key="smart_score")
-                conf_universe=st.selectbox("Scan universe",[40,60,100,150,200],index=1,key="smart_universe")
-            with a2:
-                auto=st.toggle("🔄 Auto monitor",value=True,key="smart_auto")
-                show_early=st.checkbox("Show EARLY",True,key="smart_show_early")
-                show_confirmed=st.checkbox("Show CONFIRMED",True,key="smart_show_confirmed")
-            with a3:
-                wick=st.slider("HA max lower-wick / body",0.0,1.0,.20,.05,key="smart_wick")
-                tp1_pct=st.number_input("TP1 %",0.1,20.0,1.0,0.1,key="smart_tp1")
-                tp2_pct=st.number_input("TP2 %",0.1,50.0,2.0,0.1,key="smart_tp2")
-                sl_pct=st.number_input("SL %",0.1,20.0,1.0,0.1,key="smart_sl")
-            b1,b2=st.columns(2)
-            with b1:manual=st.button("⚡ UPDATE NOW",use_container_width=True,key="smart_update")
-            with b2:st.caption("🟡 EARLY → 🟢 CONFIRMED • checks every 15 seconds when Auto monitor is ON")
-            if "smart_states" not in st.session_state: st.session_state.smart_states={}
-            now_ts=time.time()
-            due=now_ts>=st.session_state.get("smart_next",0)
-            if manual or (auto and due) or not st.session_state.get("smart_initialized",False):
-                settings={"tp1_pct":tp1_pct,"tp2_pct":tp2_pct,"sl_pct":sl_pct}
-                candidates=active_symbols(conf_universe)
-                with st.spinner(f"Smart scan: {len(candidates)} active pairs..."):
-                    fresh=scan_smart_confluence(candidates,ctf,minscore,settings,wick)
-                for z in fresh:
-                    old=st.session_state.smart_states.get(z["Coin"])
-                    if old and old.get("Status")=="EARLY" and z["Status"]=="CONFIRMED":
-                        z["UpgradedAt"]=datetime.now(ZoneInfo("Asia/Karachi")).strftime("%H:%M:%S")
-                    st.session_state.smart_states[z["Coin"]]=z
-                # Remove stale EARLY records after 30 minutes; confirmed records persist for 30 minutes too.
-                cutoff=now_ts-1800
-                st.session_state.smart_states={k:v for k,v in st.session_state.smart_states.items() if v.get("_ts",now_ts)>=cutoff or v in fresh}
-                for z in fresh: st.session_state.smart_states[z["Coin"]]["_ts"]=now_ts
-                st.session_state.smart_next=now_ts+15; st.session_state.smart_initialized=True
-            rows=list(st.session_state.smart_states.values())
-            rows=[r for r in rows if (r.get("Status")=="EARLY" and show_early) or (r.get("Status")=="CONFIRMED" and show_confirmed)]
-            rows=sorted(rows,key=lambda x:(x["Status"]=="CONFIRMED",x["Score"]),reverse=True)
-            if rows:
-                for z in rows[:20]:
-                    badge_cls="buy" if z["Status"]=="CONFIRMED" else "watch"
-                    checks=" • ".join([("✓ " if ok else "○ ")+name for name,ok in z["Checks"] if ok])
-                    levels=f'<span class="lvl entry">Entry {z["Entry"]:.8g}</span><span class="lvl tp">TP1 {z["TP1"]:.8g} (+{z["TP1 %"]:.1f}%)</span><span class="lvl tp">TP2 {z["TP2"]:.8g} (+{z["TP2 %"]:.1f}%)</span><span class="lvl sl">SL {z["SL"]:.8g} (-{z["SL %"]:.1f}%)</span>'
-                    pa=f'BOS {"✓" if z["BOS"] else "○"} • CHoCH {"✓" if z["CHoCH"] else "○"} • HH/HL {"✓" if z["HH/HL"] else "○"} • Sweep {"✓" if z["Liquidity Sweep"] else "○"} • HA {"✓" if z["HA"] else "○"}'
-                    st.markdown(f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge {badge_cls}">{z["Status"]}</span></div><div class="score green">{z["Score"]}</div></div><div class="muted">RSI {z["RSI"]} • Volume {z["Vol x"]}x • {pa} • <a href="{z["TradingView"]}" target="_blank">TradingView ↗</a></div><div class="levels">{levels}</div><div class="checks">{checks}</div></div>',unsafe_allow_html=True)
-            else:
-                st.info("No EARLY/CONFIRMED smart-entry setup right now. Auto monitor will keep checking.")
-            st.markdown('</div>',unsafe_allow_html=True)
-        smart_entry_panel()
+        st.markdown('<div class="panel"><div class="panel-title">🎯 Confluence Signal Scanner</div><div class="muted">Combine EMA trend + EMA9/33 + RSI momentum + volume + breakout + Heikin Ashi into one score.</div>',unsafe_allow_html=True)
+        a1,a2,a3=st.columns(3)
+        with a1:ctf=st.selectbox("Signal timeframe",RSI_TFS,index=1,key="conf_tf");minscore=st.slider("Minimum score",40,100,75,5,key="conf_score");conf_universe=st.selectbox("Scan universe",[60,100,150,200],index=1,key="conf_universe")
+        with a2:ema200=st.checkbox("EMA 200 Trend",True,key="c_200");ema933=st.checkbox("EMA 9/33",True,key="c_933");rsim=st.checkbox("RSI Momentum",True,key="c_rsi")
+        with a3:vol=st.checkbox("Volume Spike",True,key="c_vol");br=st.checkbox("Breakout",True,key="c_break");hac=st.checkbox("Heikin Ashi",True,key="c_ha")
+        wick=st.slider("HA max lower-wick / body",0.0,1.0,.25,.05,key="c_wick")
+
+        st.markdown('<div class="trade-levels"><b>🎯 Spot Trade Levels</b><span class="muted">Optional — choose what appears on signal cards</span></div>',unsafe_allow_html=True)
+        t1,t2,t3,t4,t5=st.columns([1,1,1,1,1])
+        with t1:show_tp1=st.checkbox("Show TP1",True,key="show_tp1")
+        with t2:show_tp2=st.checkbox("Show TP2",True,key="show_tp2")
+        with t3:show_sl=st.checkbox("Show SL",True,key="show_sl")
+        with t4:tp1_pct=st.number_input("TP1 %",0.1,20.0,1.0,0.1,key="tp1_pct")
+        with t5:tp2_pct=st.number_input("TP2 %",0.1,50.0,2.0,0.1,key="tp2_pct")
+        sl_pct=st.number_input("SL %",0.1,20.0,1.0,0.1,key="sl_pct")
+
+        if st.button("🚀 SCAN CONFLUENCE",use_container_width=True,key="conf_scan"):
+            settings={"ema200":ema200,"ema933":ema933,"rsi":rsim,"volume":vol,"breakout":br,"ha":hac,"tp1_pct":tp1_pct,"tp2_pct":tp2_pct,"sl_pct":sl_pct}
+            candidates=active_symbols(conf_universe)
+            with st.spinner(f"Fast scan: {len(candidates)} active pairs..."):st.session_state.c=scan_confluence(candidates,ctf,minscore,settings,wick)
+        if st.session_state.c:
+            for z in st.session_state.c[:12]:
+                badge="buy" if z["Score"]>=80 else "watch"; checks=" • ".join([("✓ " if ok else "○ ")+name for name,ok in z["Checks"]])
+                levels=f'<span class="lvl entry">Entry {z["Entry"]:.8g}</span>'
+                if show_tp1: levels+=f'<span class="lvl tp">TP1 {z["TP1"]:.8g} (+{z["TP1 %"]:.1f}%)</span>'
+                if show_tp2: levels+=f'<span class="lvl tp">TP2 {z["TP2"]:.8g} (+{z["TP2 %"]:.1f}%)</span>'
+                if show_sl: levels+=f'<span class="lvl sl">SL {z["SL"]:.8g} (-{z["SL %"]:.1f}%)</span>'
+                st.markdown(f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge {badge}">{z["Signal"]}</span></div><div class="score green">{z["Score"]}</div></div><div class="muted">RSI {z["RSI"]} • Volume {z["Vol x"]}x • <a href="{z["TradingView"]}" target="_blank">TradingView ↗</a></div><div class="levels">{levels}</div><div class="checks">{checks}</div></div>',unsafe_allow_html=True)
+        else:st.caption("No confluence signals loaded yet.")
+        st.markdown('</div>',unsafe_allow_html=True)
+
+    elif section=="Smart MTF Entry":
+        st.markdown('<div class="panel"><div class="panel-title">🧠 Smart MTF Entry — 5m → 15m → 1H → 4H</div><div class="muted">5m gives EARLY timing; 15m/1H confirm; 4H filters the overall trend. EARLY rows stay visible and are re-checked automatically; when 15m/1H/4H confirm, the status changes to CONFIRMED.</div>',unsafe_allow_html=True)
+        m1,m2,m3=st.columns(3)
+        with m1:
+            mtf_universe=st.selectbox("Scan universe",[60,100,150,200,300],index=1,key="mtf_universe")
+            early_min=st.slider("EARLY minimum score",45,100,60,5,key="mtf_early_min")
+        with m2:
+            confirm_min=st.slider("CONFIRMED minimum score",55,100,80,5,key="mtf_confirm_min")
+            mtf_wick=st.slider("HA lower-wick / body",0.0,1.0,.20,.05,key="mtf_wick")
+        with m3:
+            mtf_auto=st.toggle("🔄 Auto monitor",True,key="mtf_auto")
+            mtf_refresh=st.button("⚡ SCAN NOW",use_container_width=True,key="mtf_scan")
+
+        q1,q2,q3=st.columns(3)
+        with q1:mtf_tp1=st.number_input("TP1 %",0.1,20.0,1.0,0.1,key="mtf_tp1")
+        with q2:mtf_tp2=st.number_input("TP2 %",0.1,50.0,2.0,0.1,key="mtf_tp2")
+        with q3:mtf_sl=st.number_input("SL %",0.1,20.0,1.0,0.1,key="mtf_sl")
+
+        if "mtf_last" not in st.session_state: st.session_state.mtf_last=0.0
+        if "mtf_rows" not in st.session_state: st.session_state.mtf_rows=[]
+        now_mtf=time.time()
+        due=now_mtf-st.session_state.mtf_last>=60
+        if mtf_refresh or (mtf_auto and due):
+            candidates=active_symbols(mtf_universe)
+            with st.spinner(f"MTF scan: {len(candidates)} active pairs • 5m/15m/1H/4H..."):
+                st.session_state.mtf_rows=scan_mtf_early_confirmed(
+                    candidates,early_min,confirm_min,mtf_wick,mtf_tp1,mtf_tp2,mtf_sl
+                )
+            st.session_state.mtf_last=time.time()
+
+        rows=st.session_state.mtf_rows
+        if rows:
+            for z in rows[:20]:
+                badge="buy" if z["Status"]=="CONFIRMED" else "watch"
+                checks=" • ".join([("✓ " if ok else "○ ")+name for name,ok in z["Checks"]])
+                levels=f'<span class="lvl entry">Entry {z["Entry"]:.8g}</span><span class="lvl tp">TP1 {z["TP1"]:.8g} (+{z["TP1 %"]:.1f}%)</span><span class="lvl tp">TP2 {z["TP2"]:.8g} (+{z["TP2 %"]:.1f}%)</span><span class="lvl sl">SL {z["SL"]:.8g} (-{z["SL %"]:.1f}%)</span>'
+                st.markdown(
+                    f'<div class="signal"><div class="signal-top"><div><b>{z["Coin"].replace("USDT","")}</b> <span class="badge {badge}">{z["Status"]}</span> <span class="badge {badge}">{z["Signal"]}</span></div><div class="score green">{z["Score"]}</div></div>'
+                    f'<div class="muted">{z["Stage"]} • RSI 5m {z["5m RSI"]} / 15m {z["15m RSI"]} / 1H {z["1H RSI"]} / 4H {z["4H RSI"]} • <a href="{z["TradingView"]}" target="_blank">15m TradingView ↗</a></div>'
+                    f'<div class="levels">{levels}</div><div class="checks">{checks}</div></div>',
+                    unsafe_allow_html=True
+                )
+            st.caption(f'Last MTF scan: {time.strftime("%H:%M:%S")} • Auto monitor: {"ON" if mtf_auto else "OFF"}')
+        else:
+            st.info("No EARLY/CONFIRMED setup currently meets the selected filters. Auto monitor can keep checking.")
+        st.markdown('</div>',unsafe_allow_html=True)
 
     elif section=="RSI Scanner":
         st.markdown('<div class="panel"><div class="panel-title">🔍 RSI Scanner</div>',unsafe_allow_html=True)
@@ -580,6 +652,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
