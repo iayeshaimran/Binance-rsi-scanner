@@ -9,9 +9,7 @@ import time
 
 st.set_page_config(page_title="COCO Nexus", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
 
-BASE = "https://data-api.binance.vision"
-TIMEFRAMES = ["3m", "5m", "15m", "1h", "4h"]
-RSI_TFS = ["5m", "15m", "1h", "4h"]
+BASE = "https://data-apiRSI_TFS = ["5m", "15m", "1h", "4h"]
 
 # ----------------------------- UI -----------------------------
 st.markdown(r"""
@@ -652,6 +650,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
