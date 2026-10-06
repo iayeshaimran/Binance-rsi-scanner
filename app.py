@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import time
 
-st.set_page_config(page_title="COCO Pulse", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="COCO Nexus", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
 
 BASE = "https://data-api.binance.vision"
 TIMEFRAMES = ["3m", "5m", "15m", "1h", "4h"]
@@ -14,36 +14,31 @@ RSI_TFS = ["5m", "15m", "1h", "4h"]
 
 # ----------------------------- UI -----------------------------
 st.markdown(r"""
-
 <style>
-:root{--bg:#070b13;--panel:#0d1422;--line:#1e2b40;--text:#eef4ff;--muted:#8ea0b8;--green:#37e58b;--red:#ff6577;--amber:#ffc857;--blue:#4db7ff}
-html,body,[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 50% -15%,#17263c 0,#0a101b 42%,#070b13 100%)!important;color:var(--text)}
-[data-testid="stHeader"]{background:transparent!important}
-.block-container{max-width:1500px!important;padding:28px 34px 70px!important}
-.hero{padding:26px 30px 22px;border:1px solid #23334b;border-radius:24px;background:linear-gradient(135deg,rgba(18,31,50,.96),rgba(10,17,29,.96));box-shadow:0 18px 55px rgba(0,0,0,.28);margin-bottom:20px}
-.hero-top{display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{font-size:31px;font-weight:950;line-height:1}.brand span{color:var(--blue)}.hero-sub{color:var(--muted);font-size:13px;margin-top:9px}
-.live-dot{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;background:rgba(55,229,139,.10);border:1px solid rgba(55,229,139,.28);color:var(--green);font-weight:850}.live-dot i{width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 12px var(--green)}
-.panel{background:linear-gradient(145deg,rgba(15,24,39,.97),rgba(9,15,26,.97));border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 14px 38px rgba(0,0,0,.22);margin-bottom:20px}
-.panel-title{font-size:20px;font-weight:900;margin-bottom:6px}.panel-sub{color:var(--muted);font-size:12px;margin-bottom:18px}
-.stat{min-height:105px;padding:18px 20px;border-radius:17px;background:rgba(14,24,40,.9);border:1px solid #20304a}.stat-k{font-size:11px;font-weight:850;color:#8293aa;letter-spacing:.12em}.stat-v{font-size:27px;font-weight:950;margin-top:7px}
-.green{color:var(--green)!important}.redtxt{color:var(--red)!important}.blue{color:var(--blue)!important}.amber{color:var(--amber)!important}
-.market-banner{padding:25px 28px;border-radius:20px;border:1px solid #38465e;background:linear-gradient(135deg,rgba(22,34,52,.98),rgba(12,20,33,.98));text-align:center;min-height:132px;display:flex;flex-direction:column;justify-content:center}.market-banner.bull{border-color:rgba(55,229,139,.42)}.market-banner.bear{border-color:rgba(255,101,119,.42)}.market-label{font-size:11px;letter-spacing:.16em;color:#8da0b7;font-weight:900}.market-state{font-size:30px;font-weight:950;margin:5px 0}.market-note{font-size:12px;color:#a6b4c7}
-.side-card{background:linear-gradient(145deg,#101a2b,#0b1320);border:1px solid var(--line);border-radius:18px;padding:19px;margin-bottom:16px}.side-title{font-size:16px;font-weight:900;margin-bottom:13px}.side-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.055);font-size:13px}.side-row:last-child{border-bottom:0}.active{color:var(--green);font-weight:850}.idle{color:#718198}
-.mover{display:flex;align-items:center;justify-content:space-between;text-decoration:none!important;color:var(--text)!important;padding:13px 14px;margin:7px 0;border-radius:12px;background:#0c1524;border:1px solid #1b2940;transition:.16s}.mover:hover{border-color:#385273;transform:translateY(-1px);background:#111e31}
-.zone-filter{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:16px 0}.zone-filter button{min-height:43px!important;border-radius:12px!important;font-size:12px!important;font-weight:850!important}
-.zone-head{font-size:18px;font-weight:950;margin:18px 0 13px;display:flex;align-items:center;gap:8px}.zone-count{font-size:12px;color:#7e91aa;font-weight:700}
-.heat-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:11px}.coin{min-height:82px;padding:14px 12px;border-radius:14px;text-align:center;text-decoration:none!important;color:var(--text)!important;background:linear-gradient(145deg,#111d30,#0c1625);border:1px solid #253650;transition:.16s;display:block}.coin:hover{transform:translateY(-3px);border-color:#4b6b94;box-shadow:0 9px 25px rgba(0,0,0,.28)}.coin b{font-size:14px}.coin small{color:#aab8ca;font-size:11px}.coin .chg{font-size:11px;font-weight:850;color:var(--green)}.coin.red{border-color:#633340;background:linear-gradient(145deg,#27151e,#15111a)}.coin.warn{border-color:#68522d;background:linear-gradient(145deg,#292114,#17151a)}.coin.bluezone{border-color:#285477;background:linear-gradient(145deg,#11263a,#101925)}.coin.hot{border-color:#285b49;background:linear-gradient(145deg,#10251f,#0e1919)}
-.signal{padding:19px 21px;margin:11px 0;border:1px solid #20304a;border-radius:16px;background:linear-gradient(145deg,#101a2a,#0b1422)}.signal-top{display:flex;align-items:center;justify-content:space-between;gap:16px}.score{font-size:28px;font-weight:950}.badge{display:inline-block;padding:4px 8px;border-radius:7px;font-size:10px;font-weight:900;margin-left:6px}.badge.buy{background:rgba(55,229,139,.12);color:var(--green);border:1px solid rgba(55,229,139,.25)}.badge.watch{background:rgba(255,200,87,.12);color:var(--amber);border:1px solid rgba(255,200,87,.25)}.checks{font-size:11px;color:#9aabc0;margin-top:8px;line-height:1.8}.small-note,.muted{color:var(--muted);font-size:12px}
-[data-testid="stButton"] button,[data-testid="stDownloadButton"] button{border-radius:11px!important;border:1px solid #2a3d59!important;background:#111f33!important;color:#edf4ff!important;font-weight:850!important;min-height:42px}[data-testid="stButton"] button:hover{border-color:#4c719f!important;background:#15263d!important}
-[data-baseweb="select"]>div{background:#0f1a2b!important;border-color:#263951!important;color:#eef4ff!important;border-radius:11px!important}
-[data-testid="stSidebar"]{background:#080e18!important;border-right:1px solid #172438!important}
-@media(max-width:1100px){.heat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.zone-filter{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:800px){.block-container{padding:18px 14px 50px!important}.hero-top{align-items:flex-start;flex-direction:column}.brand{font-size:27px}.heat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.zone-filter{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
-.clock-box{display:flex;align-items:center;gap:12px;padding:9px 14px;border:1px solid #263951;border-radius:14px;background:rgba(8,15,26,.72);min-width:185px}
-.clock-icon{font-size:18px}.clock-time{font-size:17px;font-weight:950;line-height:1}.clock-date{font-size:10px;color:#8293aa;margin-top:4px}
+:root{--bg:#070b12;--panel:#0d1521;--panel2:#111c2b;--line:#223249;--text:#edf3fb;--muted:#8190a5;--green:#49f08b;--red:#ff6376;--amber:#ffc84a;--blue:#66b7ff;--cyan:#62e5ff;}
+.stApp{background:radial-gradient(circle at 10% 0%,#102238 0,#070b12 35%),#070b12;color:var(--text)}
+.block-container{max-width:1700px;padding-top:1rem;padding-bottom:3rem}
+section[data-testid="stSidebar"]{background:#080e18;border-right:1px solid #1b293c}
+section[data-testid="stSidebar"] .block-container{padding-top:1rem}
+.hero{background:linear-gradient(135deg,#101e31,#0b121e 65%);border:1px solid #263a54;border-radius:20px;padding:22px 24px;margin-bottom:14px;box-shadow:0 12px 35px rgba(0,0,0,.22)}
+.brand{display:flex;align-items:center;gap:12px}.brand-badge{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(135deg,#43f18a,#1b8f63);font-size:24px;box-shadow:0 0 28px rgba(73,240,139,.18)}
+.hero h1{margin:0;font-size:30px;letter-spacing:-.7px}.hero-sub{color:var(--muted);margin-top:5px}.live{color:var(--green);font-weight:800}.live-dot{display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;margin-right:5px;box-shadow:0 0 10px var(--green)}
+.panel{background:rgba(13,21,33,.93);border:1px solid var(--line);border-radius:18px;padding:15px;margin:0 0 14px 0;box-shadow:0 8px 25px rgba(0,0,0,.13)}
+.panel-title{font-size:18px;font-weight:800;margin-bottom:10px}.muted{color:var(--muted)}
+.stat{background:linear-gradient(180deg,#101b2b,#0c1420);border:1px solid #21334a;border-radius:15px;padding:13px 15px;min-height:88px}.stat-k{color:#7f91aa;font-size:12px;text-transform:uppercase;letter-spacing:.8px}.stat-v{font-size:25px;font-weight:900;margin-top:4px}.market-card{border-color:#6b3946;box-shadow:0 0 22px rgba(255,99,118,.08)}.green{color:var(--green)}.redtxt{color:var(--red)}.amber{color:var(--amber)}.blue{color:var(--blue)}
+.mover{display:flex;justify-content:space-between;align-items:center;background:#0e1927;border:1px solid #203149;border-radius:11px;padding:9px 11px;margin:6px 0;text-decoration:none;color:#fff}.mover:hover{border-color:#49f08b;transform:translateX(2px)}
+.zone-head{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:900;margin:12px 2px 7px}.zone-count{font-size:12px;color:#8494aa;font-weight:600}.heat-grid{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px}.coin{display:block;text-decoration:none;color:#fff;text-align:center;border-radius:11px;padding:9px 5px;background:linear-gradient(180deg,#172338,#111b2b);border:1px solid #30445f;transition:.14s;min-height:55px}.coin:hover{transform:translateY(-2px);border-color:#68c9ff;box-shadow:0 5px 18px rgba(74,183,255,.14)}.coin b{font-size:12px}.coin small{font-size:10px;color:#aab7c9}.coin .chg{font-size:10px;font-weight:800;margin-left:2px}.coin.hot{background:linear-gradient(180deg,#183c2b,#10251d);border-color:#2c704d}.coin.warn{background:linear-gradient(180deg,#3a3118,#211e13);border-color:#77612a}.coin.red{background:linear-gradient(180deg,#3a2027,#21151a);border-color:#78414c}.coin.bluezone{background:linear-gradient(180deg,#17334b,#13243a);border-color:#3b6c92}
+.pill-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px}.zone-filter{display:flex;flex-wrap:wrap;gap:9px;margin:8px 0 12px}.zone-label{font-size:12px;color:#8798ad;font-weight:800;align-self:center}.pill{border:1px solid #31435a;background:#101a29;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:800}.pill.greenp{border-color:#27704b;color:#6ff1a2}.pill.bluep{border-color:#356b95;color:#82caff}.pill.amberp{border-color:#7b6428;color:#ffd66c}.pill.redp{border-color:#7d3e4b;color:#ff8997}
+.signal{border:1px solid #243750;background:linear-gradient(145deg,#111d2d,#0b131f);border-radius:15px;padding:12px;margin:7px 0}.signal-top{display:flex;justify-content:space-between;align-items:center}.score{font-size:22px;font-weight:900}.badge{font-size:10px;font-weight:900;border-radius:999px;padding:5px 8px}.buy{background:#153e2a;color:#72f2a5;border:1px solid #2c8156}.watch{background:#3b3216;color:#ffd66a;border:1px solid #7b652a}.checks{color:#aebaca;font-size:11px;line-height:1.65;margin-top:6px}
+.side-card{background:#0e1826;border:1px solid #213149;border-radius:14px;padding:12px;margin-bottom:10px}.side-title{font-weight:900;font-size:15px;margin-bottom:8px}.side-row{display:flex;justify-content:space-between;padding:7px 8px;border-radius:9px;background:#101d2d;margin:5px 0;color:#c5cfdd;font-size:12px}.idle{color:#7e8da0}.active{color:var(--green);font-weight:800}.danger{color:var(--red);font-weight:800}
+div[data-testid="stButton"] button{background:#142236!important;color:#f5f8fc!important;border:1px solid #31506e!important;border-radius:10px!important;font-weight:800!important;min-height:42px!important}div[data-testid="stButton"] button:hover{background:#18342d!important;border-color:#49f08b!important}
+div[data-testid="stMetric"]{background:#0e1826;border:1px solid #213149;padding:10px;border-radius:12px}
+[data-testid="stDataFrame"]{border:1px solid #213149;border-radius:12px}
+.small-note{font-size:11px;color:#718096}.section-space{height:3px}
+@media(max-width:1200px){.heat-grid{grid-template-columns:repeat(4,minmax(110px,1fr))}}
+@media(max-width:850px){.heat-grid{grid-template-columns:repeat(3,minmax(95px,1fr))}.hero h1{font-size:24px}}
+@media(max-width:520px){.heat-grid{grid-template-columns:repeat(2,minmax(100px,1fr))}.block-container{padding-left:.65rem;padding-right:.65rem}}
 </style>
-
 """, unsafe_allow_html=True)
 
 # ----------------------------- Data -----------------------------
@@ -359,7 +354,7 @@ if "c" not in st.session_state:st.session_state.c=[]
 
 # ----------------------------- sidebar -----------------------------
 with st.sidebar:
-    st.markdown("## 🟢 COCO Pulse")
+    st.markdown("## 🟢 COCO Nexus")
     st.caption("Professional Binance signal dashboard")
     st.markdown("### Navigation")
     section=st.radio("",["Dashboard","RSI Scanner","Confluence Scanner","EMA 9/33","Heikin Ashi"],label_visibility="collapsed")
@@ -372,28 +367,9 @@ with st.sidebar:
 
 # ----------------------------- header -----------------------------
 now=datetime.now().strftime("%H:%M:%S")
-st.markdown(f'<div class="hero"><div class="brand"><div class="brand-badge">🟢</div><div><h1>COCO Pulse</h1><div class="hero-sub">Crypto Signal Scanner • Binance USDT Spot • <span class="live"><span class="live-dot"></span>LIVE</span> • Updated {now}</div></div></div></div>',unsafe_allow_html=True)
+st.markdown(f'<div class="hero"><div class="brand"><div class="brand-badge">🟢</div><div><h1>COCO Nexus</h1><div class="hero-sub">Crypto Signal Scanner • Binance USDT Spot • <span class="live"><span class="live-dot"></span>LIVE</span> • Updated {now}</div></div></div></div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="margin:4px 2px 12px">⚡ Scans are optimized for speed by prioritizing high-volume active pairs. Increase the scan universe only when you need wider coverage.</div>',unsafe_allow_html=True)
-
-@st.fragment(run_every=1)
-def render_live_header():
-    now = datetime.now()
-    clock = now.strftime("%I:%M:%S %p")
-    date_txt = now.strftime("%d %b %Y")
-    st.markdown(
-        f'<div class="hero"><div class="hero-top">'
-        f'<div><div class="brand">🚀 COCO <span>Pulse</span></div>'
-        f'<div class="hero-sub">Professional Binance USDT Market Intelligence • RSI Heatmap • Confluence Signals • EMA • Heikin Ashi</div></div>'
-        f'<div style="display:flex;align-items:center;gap:12px">'
-        f'<div class="live-dot"><i></i> LIVE • Binance Spot</div>'
-        f'<div class="clock-box"><div class="clock-icon">🕐</div>'
-        f'<div><div class="clock-time">{clock}</div><div class="clock-date">🇵🇰 PKT • {date_txt}</div></div></div>'
-        f'</div></div></div>',
-        unsafe_allow_html=True
-    )
-
-render_live_header()
 
 # ----------------------------- top stats -----------------------------
 total=len(ss); moves=[safe_change(tickers.get(s,{})) for s in ss]; up=sum(x>0 for x in moves); down=sum(x<0 for x in moves)
@@ -401,16 +377,10 @@ market="BULLISH" if up>down else "BEARISH" if down>up else "NEUTRAL"; breadth=(u
 cols=st.columns(5)
 vals=[("USDT PAIRS",total,""),("GAINERS",up,"green"),("LOSERS",down,"redtxt"),("MARKET",market,"green" if market=="BULLISH" else "redtxt"),("BREADTH",f"{breadth:.0f}%","blue")]
 for col,(k,v,c) in zip(cols,vals):
-    with col:
-        if k=="MARKET":
-            state_class="bull" if market=="BULLISH" else "bear" if market=="BEARISH" else ""
-            arrow="↗" if market=="BULLISH" else "↘" if market=="BEARISH" else "→"
-            st.markdown(f'<div class="market-banner {state_class}"><div class="market-label">OVERALL MARKET</div><div class="market-state {c}">{arrow} {market}</div><div class="market-note">{up/total*100:.0f}% rising • {down/total*100:.0f}% falling (24h)</div></div>',unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="stat"><div class="stat-k">{k}</div><div class="stat-v {c}">{v}</div></div>',unsafe_allow_html=True)
+    with col:st.markdown(f'<div class="stat"><div class="stat-k">{k}</div><div class="stat-v {c}">{v}</div></div>',unsafe_allow_html=True)
 
 # ----------------------------- movers + main content -----------------------------
-left,right=st.columns([4.8,1.35],gap="large")
+left,right=st.columns([4.2,1.25],gap="large")
 with right:
     st.markdown('<div class="panel"><div class="panel-title">🔥 Top Movers</div>',unsafe_allow_html=True)
     movers=sorted([(s,safe_change(tickers.get(s,{}))) for s in ss],key=lambda x:x[1],reverse=True)[:7]
@@ -490,7 +460,8 @@ with left:
         else:st.info("No HA alignment loaded.")
         st.markdown('</div>',unsafe_allow_html=True)
 
-st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Pulse • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
