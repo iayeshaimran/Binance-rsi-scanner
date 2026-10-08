@@ -139,8 +139,11 @@ def structure_signal(df):
     bos= c[-1] > ph_old
     prior_bearish = pl_new < pl_old
     choch = bos and prior_bearish
-    ref_low=float(min(l[-8:-2]))
-    sweep=float(l[-2]) < ref_low and float(c[-2]) > ref_low
+    # Liquidity sweep: the second-last closed candle takes a prior low
+    # and closes back above that prior-low level. The prior-low window
+    # deliberately excludes the sweep candle itself.
+    prior_low=float(min(l[-8:-2]))
+    sweep=float(l[-2]) < prior_low and float(c[-2]) > prior_low
     return {"bos":bos,"choch":choch,"hh":hh,"hl":hl,"sweep":sweep}
 
 def tf_state(symbol,tf,wick=.20):
@@ -209,8 +212,11 @@ def scan_mtf_early_confirmed(ss,early_min=60,confirm_min=80,wick=.20,
             ("5m RSI rising",a["rsi"]>a["rsi_prev"]),
             ("5m HA",a["ha"]),
             ("5m structure",a["pa"]["bos"] or a["pa"]["choch"] or a["pa"]["sweep"]),
+            ("5m HH",a["pa"]["hh"]),
+            ("5m HL",a["pa"]["hl"]),
+            ("5m Liquidity Sweep",a["pa"]["sweep"]),
             ("15m EMA9>33",b["e9"]>b["e33"]),
-            ("15m structure",b["pa"]["bos"] or b["pa"]["choch"]),
+            ("15m BOS/CHoCH",b["pa"]["bos"] or b["pa"]["choch"]),
             ("1H bullish",c["close"]>c["e200"] and c["e9"]>c["e33"]),
             ("4H bullish",d["close"]>d["e200"] and d["e9"]>d["e33"])
         ]
@@ -224,6 +230,9 @@ def scan_mtf_early_confirmed(ss,early_min=60,confirm_min=80,wick=.20,
             "TP1 %":tp1_pct,"TP2 %":tp2_pct,"SL %":sl_pct,
             "5m RSI":round(a["rsi"],1),"15m RSI":round(b["rsi"],1),
             "1H RSI":round(c["rsi"],1),"4H RSI":round(d["rsi"],1),
+            "BOS":bool(b["pa"]["bos"]),"CHoCH":bool(b["pa"]["choch"]),
+            "HH":bool(b["pa"]["hh"]),"HL":bool(b["pa"]["hl"]),
+            "Liquidity Sweep":bool(b["pa"]["sweep"]),
             "TradingView":tv(s,"15m"),"Checks":checks
         }
 
@@ -306,76 +315,6 @@ def scan_ema(ss,tf):
     with ThreadPoolExecutor(max_workers=16) as ex:
         for f in as_completed([ex.submit(one,s) for s in ss]):
             try:
-                z=f.result()
-                if z:out.append(z)
-            except Exception:pass
-    return out
-
-def scan_ha(ss,tfs,wick,minimum):
-    out=[]
-    def one(s):
-        good=[]
-        for tf in tfs:
-            d=klines(s,tf)
-            if d is not None and ha_signal(d,wick):good.append(tf)
-        if len(good)<minimum:return None
-        return {"Coin":s,"Bullish Timeframes":", ".join(good),"Alignment":f"{len(good)}/{len(tfs)}","TradingView":tv(s,good[0])}
-    with ThreadPoolExecutor(max_workers=16) as ex:
-        for f in as_completed([ex.submit(one,s) for s in ss]):
-            try:
-                z=f.result()
-                if z:out.append(z)
-            except Exception:pass
-    return out
-
-# ----------------------------- helpers -----------------------------
-def card_link(symbol,tf,change,zone):
-    cls="hot" if change>=0 else "red"
-    return f'<a class="coin {cls}" href="{tv(symbol,tf)}" target="_blank" rel="noopener noreferrer"><b>{symbol.replace("USDT","")}</b><br><small>RSI: {zone["rsi"]:.1f}</small><br><span class="chg">{change:+.1f}%</span></a>'
-
-def render_heatmap(rows,tf):
-    groups=[
-        ("🔴 10–20 Extreme",[x for x in rows if 10<=x["rsi"]<20],"red"),
-        ("🟠 20–30 Oversold",[x for x in rows if 20<=x["rsi"]<30],"warn"),
-        ("🔵 30–40 Hidden Bull & ICT",[x for x in rows if 30<=x["rsi"]<40],"bluezone"),
-        ("⚪ 40–50 Neutral",[x for x in rows if 40<=x["rsi"]<50],""),
-        ("🟢 50–60 V1 Zone",[x for x in rows if 50<=x["rsi"]<60],"hot"),
-        ("🚀 60+ Gainers",[x for x in rows if x["rsi"]>=60],"hot"),
-    ]
-
-    # Small live highlight: strongest rising RSI in the 52–55 band.
-    rising=[x for x in rows if 52<=x["rsi"]<55 and x.get("change",0)>0]
-    if rising:
-        hot=max(rising,key=lambda x:x["rsi"])
-        st.markdown(
-            f'<div class="small-note">⬜ <b>RSI 52–55 Rising:</b> '
-            f'<span class="amber">{hot["symbol"].replace("USDT","")} RSI:{hot["rsi"]:.1f}</span></div>',
-            unsafe_allow_html=True
-        )
-
-    # Show every RSI zone as its own section, like a professional market heatmap.
-    for title,items,cls in groups:
-        items=sorted(items,key=lambda x:x["rsi"],reverse=True)
-        st.markdown(
-            f'<div class="zone-head">{title} '
-            f'<span class="zone-count">{len(items)} coins</span></div>',
-            unsafe_allow_html=True
-        )
-
-        if not items:
-            st.markdown(
-                '<div class="small-note">No coins in this zone right now.</div>',
-                unsafe_allow_html=True
-            )
-            continue
-
-        html='<div class="heat-grid">'
-        for z in items:
-            html+=(
-                f'<a class="coin {cls}" href="{tv(z["symbol"],tf)}" '
-                f'target="_blank" rel="noopener noreferrer">'
-                f'<b>{z["symbol"].replace("USDT","")}</b><br>'
-                f'<small>RSI {z["rsi"]:.1f}</small><br>'
 
 
 
