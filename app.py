@@ -9,9 +9,8 @@ import time
 
 st.set_page_config(page_title="COCO Nexus", page_icon="🟢", layout="wide", initial_sidebar_state="expanded")
 
-BASE = 
-"https://data-api.binance.vision"
-
+BASE = "https://data-api.binance.vision"
+TIMEFRAMES = ["3m", "5m", "15m", "1h", "4h"]
 RSI_TFS = ["5m", "15m", "1h", "4h"]
 
 # ----------------------------- UI -----------------------------
@@ -504,7 +503,7 @@ with right:
     for s,ch in movers:
         st.markdown(f'<a class="mover" href="{tv(s,chart_tf)}" target="_blank"><b>{s.replace("USDT","")}</b><span class="green">{ch:+.2f}%</span></a>',unsafe_allow_html=True)
     st.markdown('</div>',unsafe_allow_html=True)
-    st.markdown('<div class="side-card"><div class="side-title">⚙ Active Scanners</div><div class="side-row"><span>RSI Heatmap</span><span class="active">LIVE</span></div><div class="side-row"><span>Confluence</span><span class="active" if="" else "idle">READY</span></div><div class="side-row"><span>EMA 9/33</span><span class="idle">READY</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">READY</span></div></div>',unsafe_allow_html=True)
+    st.markdown('<div class="side-card"><div class="side-title">⚙ Active Scanners</div><div class="side-row"><span>RSI Heatmap</span><span class="active">LIVE</span></div><div class="side-row"><span>Confluence</span><span class="idle">READY</span></div><div class="side-row"><span>EMA 9/33</span><span class="idle">READY</span></div><div class="side-row"><span>Heikin Ashi</span><span class="idle">READY</span></div></div>',unsafe_allow_html=True)
     st.markdown('<div class="side-card"><div class="side-title">📈 Quick Guide</div><div class="small-note">90+ Strong Buy<br>80–89 Buy<br>70–79 Watch<br>Fresh EMA9/33 cross = new bullish event<br>Cards open TradingView.</div></div>',unsafe_allow_html=True)
 
 with left:
@@ -653,6 +652,7 @@ with left:
         st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown('<div class="small-note" style="text-align:center;margin-top:18px">COCO Nexus • Technical scanner only • Binance Public Spot API • TradingView links open charts • Not financial advice</div>',unsafe_allow_html=True)
+
 
 
 
